@@ -1,0 +1,38 @@
+# Create a parent folder
+mkdir rhpro
+cd rhpro
+
+# Initialize git
+git init
+
+# Create .gitignore
+echo "node_modules/
+.env
+dist/
+.next/
+.DS_Store
+*.log
+prisma/*.db
+prisma/*.db-journal
+*/node_modules
+*/dist
+*/.next" > .gitignore
+
+# Copy your backend and frontend folders inside
+# (Copy backend and frontend folders into this directory)
+
+# Add everything
+git add .
+
+# Commit
+git commit -m "Initial commit: RHpro full stack"
+
+# Create repository on GitHub
+# 1. Go to https://github.com/new
+# 2. Repository name: "rhpro"
+# 3. Create repository
+
+# Push
+git remote add origin https://github.com/YOUR_USERNAME/rhpro.git
+git branch -M main
+git push -u origin main
