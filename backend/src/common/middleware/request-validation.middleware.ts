@@ -6,10 +6,6 @@ import {
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
-type RequestWithMetadata = Request & {
-  receivedAt?: Date;
-};
-
 @Injectable()
 export class RequestValidationMiddleware implements NestMiddleware {
   private readonly logger = new Logger(RequestValidationMiddleware.name);
@@ -21,16 +17,19 @@ export class RequestValidationMiddleware implements NestMiddleware {
     // Validate Content-Type for POST/PUT/PATCH requests
     if (
       ['POST', 'PUT', 'PATCH'].includes(req.method) &&
-      !req.is('application/json')
+      !req.is('application/json') &&
+      !req.is('multipart/form-data') // allow file uploads
     ) {
       this.logger.warn(
         `Invalid Content-Type for ${req.method} ${req.path}: ${req.get('content-type')}`,
       );
-      throw new BadRequestException('Content-Type must be application/json');
+      throw new BadRequestException(
+        'Content-Type must be application/json or multipart/form-data',
+      );
     }
 
     // Add timestamp to request
-    (req as RequestWithMetadata).receivedAt = new Date();
+    (req as any).receivedAt = new Date();
 
     next();
   }

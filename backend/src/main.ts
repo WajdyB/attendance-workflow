@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import { json, urlencoded } from 'express';
 
 dotenv.config();
 
@@ -24,7 +25,11 @@ for (const envVar of requiredEnvVars) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable validation pipe globally
+  // Increase payload size limit for file uploads
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
+
+  // Enable validation pipe globally but skip for multipart routes
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -33,6 +38,10 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
+      // Skip validation for multipart requests
+      skipMissingProperties: false,
+      // This will help handle multipart
+      validationError: { target: false },
     }),
   );
 

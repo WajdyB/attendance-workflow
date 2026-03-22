@@ -1,4 +1,3 @@
-// context/AuthContext.tsx
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -7,7 +6,27 @@ import { useRouter } from "next/navigation";
 const AUTH_STORAGE_KEY = "authStorage";
 type StorageMode = "local" | "session";
 
-// Types based on your login response
+// Define interfaces (add documents and department)
+interface Document {
+  id: string;
+  userId: string;
+  title: string;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Department {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Role {
   id: string;
   description: string;
@@ -33,6 +52,10 @@ interface DatabaseUser {
   createdAt: string;
   updatedAt: string;
   role: Role;
+  avatarUrl?: string;
+  departmentId?: string | null;
+  department?: Department | null;
+  documents?: Document[]; // Add documents field
 }
 
 interface AuthUser {
@@ -53,7 +76,7 @@ interface LoginResponse {
   message: string;
   user: AuthUser;
   session: Session;
-  databaseUser: DatabaseUser;
+  databaseUser: DatabaseUser; // This should already include documents from your API
 }
 
 interface AuthContextType {
@@ -88,7 +111,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const detectStorageMode = (): StorageMode | null => {
-    const preferredMode = localStorage.getItem(AUTH_STORAGE_KEY) as StorageMode | null;
+    const preferredMode = localStorage.getItem(
+      AUTH_STORAGE_KEY,
+    ) as StorageMode | null;
 
     if (preferredMode === "local") {
       const hasLocalSession =
@@ -113,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   };
 
-  // Load auth state from sessionStorage on mount
+  // Load auth state from storage on mount
   useEffect(() => {
     const loadAuthState = () => {
       try {
@@ -128,7 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(JSON.parse(storedUser));
 
           if (storedDatabaseUser) {
-            setDatabaseUser(JSON.parse(storedDatabaseUser));
+            const parsedUser = JSON.parse(storedDatabaseUser);
+            console.log("Loaded user with documents:", parsedUser.documents); // Debug log
+            setDatabaseUser(parsedUser);
           }
         }
       } catch (error) {
@@ -143,10 +170,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = (response: LoginResponse, rememberMe = false) => {
     const { session, user, databaseUser } = response;
+
+    // Log to verify documents are in the response
+    console.log("Login response - documents:", databaseUser.documents);
+
     const refreshToken = session.refreshToken ?? session.refresh_token;
     const storageMode: StorageMode = rememberMe ? "local" : "session";
     const targetStorage = getStorage(storageMode);
-    const otherStorage = getStorage(storageMode === "local" ? "session" : "local");
+    const otherStorage = getStorage(
+      storageMode === "local" ? "session" : "local",
+    );
 
     clearAuthKeys(otherStorage);
     clearAuthKeys(targetStorage);
@@ -184,7 +217,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateUser = (userData: Partial<DatabaseUser>) => {
     if (databaseUser) {
       const updatedUser = { ...databaseUser, ...userData };
-      sessionStorage.setItem("databaseUser", JSON.stringify(updatedUser));
+
+      // Update in storage
+      const mode = detectStorageMode();
+      if (mode) {
+        const storage = getStorage(mode);
+        storage.setItem("databaseUser", JSON.stringify(updatedUser));
+      }
+
       setDatabaseUser(updatedUser);
     }
   };

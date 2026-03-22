@@ -10,6 +10,8 @@ import { RolesModule } from './roles/roles.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
 import { RequestValidationMiddleware } from './common/middleware/request-validation.middleware';
+import { DepartmentsModule } from './departments/departments.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { RequestValidationMiddleware } from './common/middleware/request-validat
     UsersModule,
     RolesModule,
     AuthModule,
+    DepartmentsModule,
+    DocumentsModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseProvider],

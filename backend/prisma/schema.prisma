@@ -4,8 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-   url      = env("DATABASE_URL")
-
+  url      = env("DATABASE_URL")
 }
 
 model Role {
@@ -16,9 +15,18 @@ model Role {
   users       User[]
 }
 
+model Department {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]   // One department can have many users
+}
+
 model User {
   id            String   @id @default(uuid())
-  authId        String    @unique
+  authId        String   @unique
   roleId        String
   firstName     String
   lastName      String
@@ -29,9 +37,37 @@ model User {
   workEmail     String   @unique
   jobTitle      String
   bankName      String
-  cnssNumber    String   @unique
+  cnssNumber    String   @unique  
   accountStatus String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  role          Role     @relation(fields: [roleId], references: [id])
+  avatarUrl     String?
+  // Relations
+  role          Role         @relation(fields: [roleId], references: [id])
+  departmentId  String?                  // NEW: Foreign key to Department
+  department    Department?   @relation(fields: [departmentId], references: [id])
+  documents     Document[]               // NEW: User can have many documents
+}
+enum DocumentCategory {
+  HR
+  CONTRACT
+  PAYROLL
+  REQUEST_ATTACHMENT
+  OTHER 
+}
+model Document {
+  id          String   @id @default(uuid())
+  userId      String                    // Foreign key to User
+  title       String?
+  fileUrl     String?
+  fileType    String?
+  fileSize    Int?
+  category    DocumentCategory
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])    // For faster queries
 }

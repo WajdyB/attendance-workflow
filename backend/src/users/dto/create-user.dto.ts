@@ -27,7 +27,7 @@ export class CreateUserDto {
   @IsDateString()
   birthdate!: string;
 
-  @IsPhoneNumber()
+  @IsString()
   phone!: string;
 
   @IsString()
@@ -52,4 +52,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   roleId?: string;
+
+  @IsOptional()
+  @IsString()
+  departmentId?: string;
 }

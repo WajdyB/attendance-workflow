@@ -1,4 +1,3 @@
-// src/users/users.service.ts
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -15,13 +14,14 @@ export class UsersService {
     private supabaseService: SupabaseService,
   ) {}
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto, avatarFile?: Express.Multer.File) {
     let authUserId: string | null = null;
+    let avatarUrl: string | null = null;
 
     try {
-      const { personalEmail, password, roleId, accountStatus, ...profileData } =
-        createUserDto;
+      const { personalEmail, password, roleId, ...profileData } = createUserDto; // 👈 Removed accountStatus
 
+      // Check for existing user
       const existingUser = await this.prisma.user.findFirst({
         where: {
           OR: [
@@ -43,33 +43,21 @@ export class UsersService {
         );
       }
 
+      // Resolve role
       let resolvedRoleId = roleId;
-
-      if (resolvedRoleId) {
-        const roleExists = await this.prisma.role.findUnique({
-          where: { id: resolvedRoleId },
-          select: { id: true },
-        });
-
-        if (!roleExists) {
-          throw new BadRequestException('Invalid roleId provided');
-        }
-      } else {
-        const defaultRole = await this.prisma.role.findUnique({
-          where: { description: Role.USER },
+      if (!resolvedRoleId) {
+        const defaultRole = await this.prisma.role.findFirst({
+          where: { description: 'USER' },
           select: { id: true },
         });
 
         if (!defaultRole) {
-          throw new BadRequestException(
-            'Role is required: provide roleId or create USER role first',
-          );
+          throw new BadRequestException('No default role found');
         }
-
         resolvedRoleId = defaultRole.id;
       }
 
-      // Create user in Supabase Auth with admin privileges
+      // Create user in Supabase Auth
       const { data, error } =
         await this.supabaseService.adminClient.auth.admin.createUser({
           email: personalEmail,
@@ -77,74 +65,108 @@ export class UsersService {
           email_confirm: true,
         });
 
-      if (error) {
-        this.logger.error(`Supabase signup error: ${error.message}`);
-        throw new BadRequestException(error.message);
-      }
-
-      if (!data.user) {
-        this.logger.error('User creation failed in Supabase');
-        throw new BadRequestException('User creation failed in Supabase');
+      if (error || !data.user) {
+        throw new BadRequestException(
+          error?.message || 'Failed to create auth user',
+        );
       }
 
       const authUser = data.user;
       authUserId = authUser.id;
 
-      // Create profile in database
-      let user;
+      // Handle avatar upload if file exists
+      if (avatarFile) {
+        try {
+          const fileName = `avatars/${authUser.id}/${Date.now()}-${avatarFile.originalname.replace(/[^a-zA-Z0-9.]/g, '_')}`;
 
-      try {
-        user = await this.prisma.user.create({
-          data: {
-            authId: authUser.id,
-            personalEmail,
-            roleId: resolvedRoleId,
-            accountStatus: accountStatus || 'ACTIVE',
-            ...profileData,
-          },
-          include: { role: true },
-        });
-      } catch (dbError) {
-        if (authUserId) {
-          const { error: deleteError } =
-            await this.supabaseService.adminClient.auth.admin.deleteUser(
-              authUserId,
-            );
+          const { error: uploadError } =
+            await this.supabaseService.adminClient.storage
+              .from('avatars')
+              .upload(fileName, avatarFile.buffer, {
+                contentType: avatarFile.mimetype,
+                upsert: true,
+              });
 
-          if (deleteError) {
-            this.logger.error(
-              `Failed to rollback Supabase user ${authUserId}: ${deleteError.message}`,
-            );
+          if (!uploadError) {
+            const {
+              data: { publicUrl },
+            } = this.supabaseService.adminClient.storage
+              .from('avatars')
+              .getPublicUrl(fileName);
+
+            avatarUrl = publicUrl;
+            this.logger.log(`Avatar uploaded successfully: ${avatarUrl}`);
+          } else {
+            this.logger.error(`Avatar upload failed: ${uploadError.message}`);
           }
+        } catch (uploadError) {
+          const errorMessage =
+            uploadError instanceof Error
+              ? uploadError.message
+              : 'Unknown upload error';
+          this.logger.error(`Avatar upload exception: ${errorMessage}`);
         }
-
-        if (
-          dbError instanceof Prisma.PrismaClientKnownRequestError &&
-          dbError.code === 'P2002'
-        ) {
-          throw new BadRequestException(
-            'Duplicate user data: personalEmail, workEmail, or cnssNumber already exists',
-          );
-        }
-
-        throw dbError;
       }
 
-      this.logger.log(`User created successfully: ${user.id}`);
+      // Create user in database - WITHOUT accountStatus
+      // In users.service.ts - create method
+      const user = await this.prisma.user.create({
+        data: {
+          authId: authUser.id,
+          personalEmail,
+          roleId: resolvedRoleId,
+          avatarUrl,
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
+          birthdate: profileData.birthdate,
+          phone: profileData.phone,
+          address: profileData.address,
+          workEmail: profileData.workEmail,
+          jobTitle: profileData.jobTitle,
+          bankName: profileData.bankName,
+          cnssNumber: profileData.cnssNumber,
+          departmentId: profileData.departmentId,
+          accountStatus: 'ACTIVE',
+        },
+        include: {
+          role: true,
+          documents: true,
+          department: true,
+        },
+      });
+
+      this.logger.log(
+        `User created successfully: ${user.id} ${avatarUrl ? 'with avatar' : 'without avatar'}`,
+      );
 
       return {
         message: 'User created successfully',
         user,
       };
     } catch (error) {
+      // Cleanup on failure
+      if (authUserId) {
+        try {
+          await this.supabaseService.adminClient.auth.admin.deleteUser(
+            authUserId,
+          );
+        } catch (cleanupError) {
+          const cleanupMessage =
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : 'Unknown cleanup error';
+          this.logger.error(`Failed to cleanup auth user: ${cleanupMessage}`);
+        }
+      }
+
       if (error instanceof BadRequestException) {
         throw error;
       }
+
       const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Unexpected error during user creation: ${errorMessage}`,
-      );
+        error instanceof Error ? error.message : 'Unknown error occurred';
+
+      this.logger.error(`User creation failed: ${errorMessage}`);
       throw new BadRequestException('Failed to create user');
     }
   }
@@ -152,7 +174,7 @@ export class UsersService {
   async findAll() {
     try {
       return await this.prisma.user.findMany({
-        include: { role: true },
+        include: { role: true, documents: true, department: true },
       });
     } catch (error) {
       const errorMessage =
@@ -166,7 +188,7 @@ export class UsersService {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id },
-        include: { role: true },
+        include: { role: true, documents: true, department: true },
       });
 
       if (!user) {
@@ -182,6 +204,21 @@ export class UsersService {
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error fetching user ${id}: ${errorMessage}`);
       throw new BadRequestException('Failed to fetch user');
+    }
+  }
+
+  async updateUser(userId: string, updateData: any) {
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        include: { role: true, documents: true, department: true },
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error updating user ${userId}: ${errorMessage}`);
+      throw new BadRequestException('Failed to update user');
     }
   }
 }
