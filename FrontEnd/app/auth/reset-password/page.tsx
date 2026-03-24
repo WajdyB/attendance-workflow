@@ -3,11 +3,29 @@
 
 import Link from "next/link";
 import { Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiConfig } from "@/app/utils/api-config";
+import { apiConfig } from "@/utils/api-config";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-orange-50 to-white px-4">
+          <div className="w-full max-w-md rounded-2xl border border-orange-100 bg-white p-8 shadow-sm text-center text-sm text-stone-600">
+            Loading reset link...
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -96,11 +114,11 @@ export default function ResetPasswordPage() {
 
           {/* Title */}
           <h2 className="text-2xl font-semibold text-stone-900 text-center">
-            Invalid Reset Link
+            {t("auth.reset.invalidTitle")}
           </h2>
 
           <p className="mt-4 text-sm text-stone-600 text-center">
-            The password reset link is invalid or has expired. Please request a new one.
+            {t("auth.reset.invalidBody")}
           </p>
 
           {/* Action Buttons */}
@@ -109,13 +127,13 @@ export default function ResetPasswordPage() {
               href="/auth/forget-password"
               className="inline-block w-full rounded-lg bg-orange-600 py-2.5 text-center font-medium text-white transition hover:bg-orange-700"
             >
-              Request New Reset Link
+              {t("auth.reset.requestNew")}
             </Link>
             <Link
               href="/auth/login"
               className="inline-block w-full py-2 text-center text-sm text-orange-700 hover:text-orange-800 hover:underline"
             >
-              Back to login
+              {t("auth.reset.back")}
             </Link>
           </div>
         </div>
@@ -136,11 +154,11 @@ export default function ResetPasswordPage() {
 
           {/* Title */}
           <h2 className="text-2xl font-semibold text-stone-900 text-center">
-            Password Reset Successful
+            {t("auth.reset.successTitle")}
           </h2>
 
           <p className="mt-4 text-sm text-stone-600 text-center">
-            Your password has been successfully reset. You can now log in with your new password.
+            {t("auth.reset.successBody")}
           </p>
 
           {/* Action Button */}
@@ -148,7 +166,7 @@ export default function ResetPasswordPage() {
             href="/auth/login"
             className="mt-6 block w-full rounded-lg bg-orange-600 py-2.5 text-center font-medium text-white transition hover:bg-orange-700"
           >
-            Go to Login
+            {t("auth.reset.goLogin")}
           </Link>
         </div>
       </div>
@@ -160,11 +178,11 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md rounded-2xl border border-orange-100 bg-white p-8 shadow-sm">
         {/* Title */}
         <h2 className="text-2xl font-semibold text-stone-900">
-          Set New Password
+          {t("auth.reset.title")}
         </h2>
 
         <p className="mt-2 mb-6 text-sm text-stone-600">
-          Enter your new password below.
+          {t("auth.reset.subtitle")}
         </p>
 
         {/* Error Message */}
@@ -180,7 +198,7 @@ export default function ResetPasswordPage() {
           {/* Password Field */}
           <div>
             <label className="mb-2 block text-sm font-medium text-stone-700">
-              New Password
+              {t("auth.reset.newPassword")}
             </label>
 
             <div className="flex items-center rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2.5">
@@ -208,14 +226,14 @@ export default function ResetPasswordPage() {
             </div>
 
             <p className="mt-1 text-xs text-stone-500">
-              At least 8 characters
+              {t("auth.reset.passwordHint")}
             </p>
           </div>
 
           {/* Confirm Password Field */}
           <div>
             <label className="mb-2 block text-sm font-medium text-stone-700">
-              Confirm Password
+              {t("auth.reset.confirmPassword")}
             </label>
 
             <div className="flex items-center rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2.5">
@@ -259,10 +277,10 @@ export default function ResetPasswordPage() {
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                Resetting...
+                {t("auth.reset.loading")}
               </>
             ) : (
-              "Reset Password"
+              t("auth.reset.submit")
             )}
           </button>
         </form>
@@ -273,10 +291,11 @@ export default function ResetPasswordPage() {
             href="/auth/login"
             className="text-sm text-orange-700 hover:text-orange-800 hover:underline"
           >
-            ← Back to login
+            {t("auth.reset.back")}
           </Link>
         </div>
       </div>
     </div>
   );
 }
+

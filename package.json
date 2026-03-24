@@ -1,0 +1,20 @@
+{
+  "name": "attendance-workflow-monorepo",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "FrontEnd"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm --workspace backend run start:dev",
+    "dev:frontend": "npm --workspace FrontEnd run dev",
+    "build": "npm --workspace backend run build && npm --workspace FrontEnd run build",
+    "lint": "npm --workspace backend run lint && npm --workspace FrontEnd run lint",
+    "test": "npm --workspace backend run test && npm --workspace backend run test:e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

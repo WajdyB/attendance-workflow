@@ -11,11 +11,12 @@ import {
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DepartmentsService } from './departments.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { Role } from '../common/enums/role.enum';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { RequireRoles } from 'src/common/decorator/roles.decorator';
+import { RequireRoles } from '../common/decorator/roles.decorator';
 @Controller('departments')
 @UseGuards(RolesGuard)
 export class DepartmentsController {
@@ -47,7 +48,7 @@ export class DepartmentsController {
   @Patch(':id')
   async update(
     @Param('id') id: string, // ✅ FIXED: Keep as string
-    @Body() updateDepartmentDto: any,
+    @Body() updateDepartmentDto: Prisma.DepartmentUpdateInput,
   ) {
     return this.departmentsService.update(id, updateDepartmentDto);
   }

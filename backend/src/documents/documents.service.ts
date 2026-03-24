@@ -5,6 +5,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import type { PostgrestError } from '@supabase/supabase-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -37,12 +38,25 @@ export class DocumentsService {
       // Ensure documents bucket exists
       await this.ensureDocumentsBucket();
 
+      const normalizedTitle = createDocumentDto.title.trim();
+      const latestVersion = await this.prisma.document.findFirst({
+        where: {
+          userId,
+          title: normalizedTitle,
+          category: createDocumentDto.category,
+        },
+        orderBy: { versionNumber: 'desc' },
+        select: { versionNumber: true },
+      });
+
+      const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
+
       // Generate unique filename
       const sanitizedFileName = file.originalname.replace(
         /[^a-zA-Z0-9.]/g,
         '_',
       );
-      const fileName = `documents/${userId}/${Date.now()}-${sanitizedFileName}`;
+      const fileName = `documents/${userId}/${Date.now()}-v${versionNumber}-${sanitizedFileName}`;
 
       // Upload to Supabase Storage
       const { error: uploadError } =
@@ -66,15 +80,46 @@ export class DocumentsService {
         .from('documents')
         .getPublicUrl(fileName);
 
+      const parsedTags = (() => {
+        if (!createDocumentDto.tags) {
+          return [] as string[];
+        }
+
+        if (Array.isArray(createDocumentDto.tags)) {
+          return createDocumentDto.tags;
+        }
+
+        try {
+          const value: unknown = JSON.parse(
+            createDocumentDto.tags as unknown as string,
+          );
+          return Array.isArray(value)
+            ? value.filter(
+                (entry): entry is string => typeof entry === 'string',
+              )
+            : [];
+        } catch {
+          return String(createDocumentDto.tags)
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean);
+        }
+      })();
+
       // Save document metadata in database
       const document = await this.prisma.document.create({
         data: {
           userId,
-          title: createDocumentDto.title,
+          uploadedBy: createDocumentDto.uploadedBy ?? userId,
+          title: normalizedTitle,
+          description: createDocumentDto.description,
           category: createDocumentDto.category,
+          versionNumber,
+          originalName: file.originalname,
+          tags: parsedTags,
           fileUrl: publicUrl,
           fileType: file.mimetype,
-          fileSize: file.size,
+          fileSize: BigInt(file.size),
         },
       });
 
@@ -84,7 +129,7 @@ export class DocumentsService {
 
       return {
         message: 'Document uploaded successfully',
-        document,
+        document: this.serializeForResponse(document),
       };
     } catch (error) {
       if (
@@ -100,14 +145,49 @@ export class DocumentsService {
     }
   }
 
-  async getUserDocuments(userId: string) {
+  async getUserDocuments(
+    userId: string,
+    filters?: {
+      category?: DocumentCategory;
+      search?: string;
+      tag?: string;
+    },
+  ) {
     try {
       const documents = await this.prisma.document.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
+        where: {
+          userId,
+          ...(filters?.category ? { category: filters.category } : {}),
+          ...(filters?.search
+            ? {
+                OR: [
+                  {
+                    title: {
+                      contains: filters.search,
+                      mode: 'insensitive',
+                    },
+                  },
+                  {
+                    description: {
+                      contains: filters.search,
+                      mode: 'insensitive',
+                    },
+                  },
+                  {
+                    originalName: {
+                      contains: filters.search,
+                      mode: 'insensitive',
+                    },
+                  },
+                ],
+              }
+            : {}),
+          ...(filters?.tag ? { tags: { has: filters.tag } } : {}),
+        },
+        orderBy: [{ title: 'asc' }, { versionNumber: 'desc' }],
       });
 
-      return documents;
+      return this.serializeForResponse(documents);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -131,7 +211,7 @@ export class DocumentsService {
         throw new NotFoundException('Document not found');
       }
 
-      return document;
+      return this.serializeForResponse(document);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -175,8 +255,12 @@ export class DocumentsService {
             }
           }
         } catch (storageError) {
+          const storageMessage =
+            storageError instanceof Error
+              ? storageError.message
+              : String(storageError);
           this.logger.error(
-            `Error deleting file from storage: ${storageError}`,
+            `Error deleting file from storage: ${storageMessage}`,
           );
           // Continue with database deletion
         }
@@ -214,10 +298,10 @@ export class DocumentsService {
           userId,
           category,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ title: 'asc' }, { versionNumber: 'desc' }],
       });
 
-      return documents;
+      return this.serializeForResponse(documents);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -225,6 +309,36 @@ export class DocumentsService {
         `Failed to fetch documents by category: ${errorMessage}`,
       );
       throw new BadRequestException('Failed to fetch documents');
+    }
+  }
+
+  async getDocumentVersions(
+    userId: string,
+    title?: string,
+    category?: DocumentCategory,
+  ) {
+    try {
+      if (!title) {
+        return [];
+      }
+
+      const documents = await this.prisma.document.findMany({
+        where: {
+          userId,
+          title,
+          ...(category ? { category } : {}),
+        },
+        orderBy: { versionNumber: 'desc' },
+      });
+
+      return this.serializeForResponse(documents);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to fetch document versions for ${title}: ${errorMessage}`,
+      );
+      throw new BadRequestException('Failed to fetch document versions');
     }
   }
 
@@ -244,17 +358,50 @@ export class DocumentsService {
               'application/pdf',
               'image/jpeg',
               'image/png',
+              'image/webp',
               'application/msword',
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'application/vnd.ms-excel',
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ],
           },
         );
         this.logger.log('Documents bucket created successfully');
       }
     } catch (error) {
+      const supabaseError = error as PostgrestError;
       const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+        typeof supabaseError?.message === 'string'
+          ? supabaseError.message
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error';
       this.logger.error(`Error ensuring documents bucket: ${errorMessage}`);
     }
+  }
+
+  private serializeForResponse<T>(payload: T): T {
+    return this.convertBigInt(payload) as T;
+  }
+
+  private convertBigInt(value: unknown): unknown {
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => this.convertBigInt(entry));
+    }
+
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+          key,
+          this.convertBigInt(entry),
+        ]),
+      );
+    }
+
+    return value;
   }
 }

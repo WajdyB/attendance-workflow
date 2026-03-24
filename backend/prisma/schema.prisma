@@ -1,73 +1,411 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public", "auth"]
 }
 
-model Role {
-  id          String   @id @default(uuid())
-  description String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  users       User[]
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("account_status")
+  @@schema("public")
 }
 
-model Department {
-  id          String   @id @default(uuid())
-  name        String
-  code        String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  users       User[]   // One department can have many users
+enum ContractType {
+  CDI
+  CDD
+  STAGE
+  FREELANCE
+
+  @@map("contract_type")
+  @@schema("public")
 }
 
-model User {
-  id            String   @id @default(uuid())
-  authId        String   @unique
-  roleId        String
-  firstName     String
-  lastName      String
-  birthdate     DateTime
-  phone         String
-  address       String
-  personalEmail String   @unique
-  workEmail     String   @unique
-  jobTitle      String
-  bankName      String
-  cnssNumber    String   @unique  
-  accountStatus String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  avatarUrl     String?
-  // Relations
-  role          Role         @relation(fields: [roleId], references: [id])
-  departmentId  String?                  // NEW: Foreign key to Department
-  department    Department?   @relation(fields: [departmentId], references: [id])
-  documents     Document[]               // NEW: User can have many documents
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+
+  @@map("timesheet_status")
+  @@schema("public")
 }
+
+enum RequestStatus {
+  DRAFT
+  SENT
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("request_status")
+  @@schema("public")
+}
+
+enum RequestType {
+  LEAVE
+  AUGMENTATION
+  OTHER
+
+  @@map("request_type")
+  @@schema("public")
+}
+
+enum ProjectStatus {
+  IN_PROGRESS
+  FINISHED
+  SUSPENDED
+
+  @@map("project_status")
+  @@schema("public")
+}
+
+enum ApprovalStatus {
+  VALIDATED
+  INVALIDATED
+
+  @@map("approval_status")
+  @@schema("public")
+}
+
+enum NotificationStatus {
+  SEEN
+  UNSEEN
+
+  @@map("notification_status")
+  @@schema("public")
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+
+  @@map("notification_channel")
+  @@schema("public")
+}
+
 enum DocumentCategory {
   HR
   CONTRACT
   PAYROLL
   REQUEST_ATTACHMENT
-  OTHER 
-}
-model Document {
-  id          String   @id @default(uuid())
-  userId      String                    // Foreign key to User
-  title       String?
-  fileUrl     String?
-  fileType    String?
-  fileSize    Int?
-  category    DocumentCategory
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  OTHER
 
-  @@index([userId])    // For faster queries
+  @@map("document_category")
+  @@schema("public")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  description String   @unique
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  users       User[]
+
+  @@map("roles")
+  @@schema("public")
+}
+
+model Department {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  users     User[]
+
+  @@map("departments")
+  @@schema("public")
+}
+
+model User {
+  id            String        @id @db.Uuid
+  roleId        String?       @map("role_id") @db.Uuid
+  departmentId  String?       @map("department_id") @db.Uuid
+  firstName     String        @map("first_name")
+  lastName      String        @map("last_name")
+  birthdate     DateTime?     @map("birth_date") @db.Date
+  phone         String?
+  phoneFixed    String?       @map("phone_fixed")
+  address       String?
+  personalEmail String?       @unique @map("personal_email")
+  workEmail     String?       @unique @map("work_email")
+  jobTitle      String?       @map("job_title")
+  bankName      String?       @map("bank_name")
+  bankBicSwift  String?       @map("bank_bic_swift")
+  rib           String?
+  cnssNumber    String?       @unique @map("cnss_number")
+  pictureUrl    String?       @map("picture_url")
+  accountStatus AccountStatus @default(ACTIVE) @map("account_status")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  role              Role?           @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  department        Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  admin             Admin?
+  manager           Manager?
+  collaborator      Collaborator?
+  contracts         Contract[]
+  salaryHistory     SalaryHistory[]
+  leaveBalances     LeaveBalance[]
+  timesheets        Timesheet[]
+  requests          Request[]       @relation("RequestSubmittedBy")
+  documents         Document[]      @relation("DocumentOwner")
+  uploadedDocuments Document[]      @relation("DocumentUploadedBy")
+  notifications     Notification[]
+
+  @@map("users")
+  @@schema("public")
+}
+
+model Admin {
+  id        String   @id @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("admins")
+  @@schema("public")
+}
+
+model Manager {
+  id                String          @id @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  user              User            @relation(fields: [id], references: [id], onDelete: Cascade)
+  collaborators     Collaborator[]  @relation("CollaboratorManager")
+  decidedTimesheets Timesheet[]
+  validatedSalaries SalaryHistory[]
+  decidedRequests   Request[]       @relation("RequestDecidedBy")
+  evaluations       Evaluation[]
+
+  @@map("managers")
+  @@schema("public")
+}
+
+model Collaborator {
+  id          String              @id @db.Uuid
+  managerId   String              @map("manager_id") @db.Uuid
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User                @relation(fields: [id], references: [id], onDelete: Cascade)
+  manager     Manager             @relation("CollaboratorManager", fields: [managerId], references: [id], onDelete: Restrict)
+  assignments ProjectAssignment[]
+  evaluations Evaluation[]
+
+  @@map("collaborators")
+  @@schema("public")
+}
+
+model Contract {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  contractType   ContractType @map("contract_type")
+  startDate      DateTime     @map("start_date") @db.Date
+  endDate        DateTime?    @map("end_date") @db.Date
+  weeklyHours    Decimal?     @map("weekly_hours") @db.Decimal(5, 2)
+  baseSalary     Decimal?     @map("base_salary") @db.Decimal(12, 2)
+  netSalary      Decimal?     @map("net_salary") @db.Decimal(12, 2)
+  bonuses        Decimal?     @map("bonuses") @db.Decimal(12, 2)
+  benefitsInKind String?      @map("benefits_in_kind")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("contracts")
+  @@schema("public")
+}
+
+model SalaryHistory {
+  id              String         @id @default(uuid()) @db.Uuid
+  userId          String         @map("user_id") @db.Uuid
+  validatedBy     String?        @map("validated_by") @db.Uuid
+  oldSalary       Decimal        @map("old_salary") @db.Decimal(12, 2)
+  newSalary       Decimal        @map("new_salary") @db.Decimal(12, 2)
+  changeDate      DateTime       @map("change_date") @db.Date
+  status          ApprovalStatus @default(VALIDATED)
+  decisionComment String?        @map("decision_comment")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  manager         Manager?       @relation(fields: [validatedBy], references: [id], onDelete: SetNull)
+
+  @@map("salary_history")
+  @@schema("public")
+}
+
+model LeaveBalance {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  year          Int
+  allocatedDays Decimal  @default(0) @map("allocated_days") @db.Decimal(8, 2)
+  usedDays      Decimal  @default(0) @map("used_days") @db.Decimal(8, 2)
+  pendingDays   Decimal  @default(0) @map("pending_days") @db.Decimal(8, 2)
+  remainingDays Decimal  @default(0) @map("remaining_days") @db.Decimal(8, 2)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year], map: "leave_balances_unique_user_year")
+  @@map("leave_balances")
+  @@schema("public")
+}
+
+model Timesheet {
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  decidedBy       String?          @map("decided_by") @db.Uuid
+  weekStartDate   DateTime         @map("week_start_date") @db.Date
+  totalHours      Decimal          @default(0) @map("total_hours") @db.Decimal(8, 2)
+  regularHours    Decimal          @default(0) @map("regular_hours") @db.Decimal(8, 2)
+  overtimeHours   Decimal          @default(0) @map("overtime_hours") @db.Decimal(8, 2)
+  status          TimesheetStatus  @default(DRAFT)
+  submittedAt     DateTime?        @map("submitted_at") @db.Timestamptz(6)
+  approvedAt      DateTime?        @map("approved_at") @db.Timestamptz(6)
+  rejectedAt      DateTime?        @map("rejected_at") @db.Timestamptz(6)
+  lockedAt        DateTime?        @map("locked_at") @db.Timestamptz(6)
+  decisionComment String?          @map("decision_comment")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  manager         Manager?         @relation(fields: [decidedBy], references: [id], onDelete: SetNull)
+  entries         TimesheetEntry[]
+
+  @@unique([userId, weekStartDate], map: "timesheets_unique_user_week")
+  @@map("timesheets")
+  @@schema("public")
+}
+
+model TimesheetEntry {
+  id                  String    @id @default(uuid()) @db.Uuid
+  timesheetId         String    @map("timesheet_id") @db.Uuid
+  projectId           String    @map("project_id") @db.Uuid
+  entryDate           DateTime  @map("entry_date") @db.Date
+  taskName            String?   @map("task_name")
+  hours               Decimal   @map("hours") @db.Decimal(6, 2)
+  activityDescription String?   @map("activity_description")
+  comments            String?
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  timesheet           Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  project             Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([timesheetId], map: "timesheet_entries_idx_timesheet")
+  @@index([projectId], map: "timesheet_entries_idx_project")
+  @@map("timesheet_entries")
+  @@schema("public")
+}
+
+model Project {
+  id               String              @id @default(uuid()) @db.Uuid
+  code             String?             @unique
+  name             String?
+  status           ProjectStatus       @default(IN_PROGRESS)
+  startDate        DateTime?           @map("start_date") @db.Date
+  endDate          DateTime?           @map("end_date") @db.Date
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assignments      ProjectAssignment[]
+  timesheetEntries TimesheetEntry[]
+
+  @@map("projects")
+  @@schema("public")
+}
+
+model ProjectAssignment {
+  id             String       @id @default(uuid()) @db.Uuid
+  projectId      String       @map("project_id") @db.Uuid
+  collaboratorId String       @map("collaborator_id") @db.Uuid
+  roleOnProject  String?      @map("role_on_project")
+  assignedAt     DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  unassignedAt   DateTime?    @map("unassigned_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  collaborator   Collaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+
+  @@map("project_assignments")
+  @@schema("public")
+}
+
+model Request {
+  id              String        @id @default(uuid()) @db.Uuid
+  submittedBy     String        @map("submitted_by") @db.Uuid
+  decidedBy       String?       @map("decided_by") @db.Uuid
+  requestType     RequestType   @map("request_type")
+  status          RequestStatus @default(DRAFT)
+  comment         String?
+  decisionComment String?       @map("decision_comment")
+  leavePaid       Boolean?      @map("leave_paid")
+  leaveStartDate  DateTime?     @map("leave_start_date") @db.Date
+  leaveEndDate    DateTime?     @map("leave_end_date") @db.Date
+  proposedSalary  Decimal?      @map("proposed_salary") @db.Decimal(12, 2)
+  effectiveDate   DateTime?     @map("effective_date") @db.Date
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  submitter       User          @relation("RequestSubmittedBy", fields: [submittedBy], references: [id], onDelete: Cascade)
+  manager         Manager?      @relation("RequestDecidedBy", fields: [decidedBy], references: [id], onDelete: SetNull)
+
+  @@map("requests")
+  @@schema("public")
+}
+
+model Evaluation {
+  id             String       @id @default(uuid()) @db.Uuid
+  managerId      String       @map("manager_id") @db.Uuid
+  collaboratorId String       @map("collaborator_id") @db.Uuid
+  reviewDate     DateTime?    @map("review_date") @db.Date
+  globalScore    Decimal?     @map("global_score") @db.Decimal(5, 2)
+  comments       String?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  manager        Manager      @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  collaborator   Collaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+
+  @@map("evaluations")
+  @@schema("public")
+}
+
+model Document {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  uploadedBy    String?          @map("uploaded_by") @db.Uuid
+  category      DocumentCategory
+  title         String?
+  description   String?
+  versionNumber Int              @default(1) @map("version_number")
+  originalName  String?          @map("original_name")
+  tags          String[]         @default([])
+  fileUrl       String?          @map("file_url")
+  fileType      String?          @map("file_type")
+  fileSize      BigInt?          @map("file_size")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user          User             @relation("DocumentOwner", fields: [userId], references: [id], onDelete: Cascade)
+  uploader      User?            @relation("DocumentUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, title, category, versionNumber])
+  @@map("documents")
+  @@schema("public")
+}
+
+model Notification {
+  id          String              @id @default(uuid()) @db.Uuid
+  recipientId String              @map("recipient_id") @db.Uuid
+  channel     NotificationChannel
+  title       String?
+  message     String?
+  status      NotificationStatus  @default(UNSEEN)
+  sentAt      DateTime?           @map("sent_at") @db.Timestamptz(6)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  recipient   User                @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@schema("public")
 }

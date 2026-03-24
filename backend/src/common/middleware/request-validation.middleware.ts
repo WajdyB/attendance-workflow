@@ -29,7 +29,7 @@ export class RequestValidationMiddleware implements NestMiddleware {
     }
 
     // Add timestamp to request
-    (req as any).receivedAt = new Date();
+    (req as Request & { receivedAt?: Date }).receivedAt = new Date();
 
     next();
   }

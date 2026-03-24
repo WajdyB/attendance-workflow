@@ -1,41 +1,25 @@
--- Attendance Workflow - Full Database Schema
--- Target: PostgreSQL / Supabase
--- Notes:
--- 1) Execute on a clean database or adapt for migration scenarios.
--- 2) This script follows the project specification (MVP + planned structural entities).
+-- Attendance Workflow - Full Database Schema (PDF aligned)
+-- Target: Supabase PostgreSQL
+-- Source of truth: "Architecture Base de Données" PDF
 
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- =========================================================
--- ENUMS
+-- ENUMS (roles are NOT enums by design)
 -- =========================================================
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-    CREATE TYPE user_role AS ENUM ('COLLABORATOR', 'MANAGER', 'HR_ADMIN', 'DIRECTION');
-  END IF;
-END$$;
-
-DO $$
-BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_status') THEN
-    CREATE TYPE account_status AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED');
+    CREATE TYPE account_status AS ENUM ('ACTIVE', 'INACTIVE');
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'employment_type') THEN
-    CREATE TYPE employment_type AS ENUM ('CDI', 'CDD', 'INTERNSHIP', 'FREELANCE');
-  END IF;
-END$$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status') THEN
-    CREATE TYPE project_status AS ENUM ('IN_PROGRESS', 'COMPLETED', 'SUSPENDED');
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'contract_type') THEN
+    CREATE TYPE contract_type AS ENUM ('CDI', 'CDD', 'STAGE', 'FREELANCE');
   END IF;
 END$$;
 
@@ -48,55 +32,50 @@ END$$;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'leave_request_status') THEN
-    CREATE TYPE leave_request_status AS ENUM ('DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED');
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'request_status') THEN
+    CREATE TYPE request_status AS ENUM ('DRAFT', 'SENT', 'PENDING', 'APPROVED', 'REJECTED');
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'leave_type') THEN
-    CREATE TYPE leave_type AS ENUM ('PTO', 'SICK', 'MATERNITY', 'PATERNITY', 'UNPAID', 'TRAINING', 'FAMILY_EVENT', 'OTHER');
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'request_type') THEN
+    CREATE TYPE request_type AS ENUM ('LEAVE', 'AUGMENTATION', 'OTHER');
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status') THEN
+    CREATE TYPE project_status AS ENUM ('IN_PROGRESS', 'FINISHED', 'SUSPENDED');
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'approval_status') THEN
+    CREATE TYPE approval_status AS ENUM ('VALIDATED', 'INVALIDATED');
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_status') THEN
+    CREATE TYPE notification_status AS ENUM ('SEEN', 'UNSEEN');
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_channel') THEN
+    CREATE TYPE notification_channel AS ENUM ('IN_APP', 'EMAIL', 'PUSH');
   END IF;
 END$$;
 
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_category') THEN
-    CREATE TYPE document_category AS ENUM (
-      'CONTRACT',
-      'PAYSLIP',
-      'DIPLOMA_CERTIFICATE',
-      'WORK_CERTIFICATE',
-      'PERFORMANCE_REVIEW',
-      'EXPENSE_NOTE',
-      'ADMINISTRATIVE',
-      'SALARY_AMENDMENT',
-      'OTHER'
-    );
-  END IF;
-END$$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'evaluation_type') THEN
-    CREATE TYPE evaluation_type AS ENUM ('ANNUAL', 'SEMESTER', 'PROJECT_END', 'FEEDBACK_360');
-  END IF;
-END$$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
-    CREATE TYPE notification_type AS ENUM (
-      'TIMESHEET_SUBMITTED',
-      'TIMESHEET_APPROVED',
-      'TIMESHEET_REJECTED',
-      'LEAVE_REQUEST_SUBMITTED',
-      'LEAVE_REQUEST_APPROVED',
-      'LEAVE_REQUEST_REJECTED',
-      'PERFORMANCE_REVIEW_CREATED',
-      'GENERAL'
-    );
+    CREATE TYPE document_category AS ENUM ('HR', 'CONTRACT', 'PAYROLL', 'REQUEST_ATTACHMENT', 'OTHER');
   END IF;
 END$$;
 
@@ -112,21 +91,47 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =========================================================
--- CORE SECURITY / ACCESS TABLES
+-- STRUCTURAL TABLES
 -- =========================================================
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS departments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_user_id UUID UNIQUE,
-  email TEXT NOT NULL UNIQUE,
-  role user_role NOT NULL DEFAULT 'COLLABORATOR',
-  account_status account_status NOT NULL DEFAULT 'ACTIVE',
-  last_login_at TIMESTAMPTZ,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT users_email_format_chk CHECK (POSITION('@' IN email) > 1)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- In Supabase this can link to auth.users when available
+CREATE TABLE IF NOT EXISTS roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  description TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Central business profile table
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY,
+  role_id UUID REFERENCES roles(id) ON DELETE SET NULL,
+  department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  birth_date DATE,
+  phone TEXT,
+  phone_fixed TEXT,
+  address TEXT,
+  personal_email TEXT UNIQUE,
+  work_email TEXT UNIQUE,
+  job_title TEXT,
+  bank_name TEXT,
+  bank_bic_swift TEXT,
+  rib TEXT,
+  cnss_number TEXT UNIQUE,
+  account_status account_status NOT NULL DEFAULT 'ACTIVE',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- If auth.users exists, enforce users.id -> auth.users(id) (ON DELETE CASCADE)
 DO $$
 BEGIN
   IF EXISTS (
@@ -134,365 +139,247 @@ BEGIN
     FROM information_schema.tables
     WHERE table_schema = 'auth' AND table_name = 'users'
   ) THEN
-    ALTER TABLE users
-      ADD CONSTRAINT users_auth_user_id_fkey
-      FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+    BEGIN
+      ALTER TABLE users
+        ADD CONSTRAINT users_id_auth_users_fkey
+        FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END;
   END IF;
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
 END$$;
 
-CREATE TABLE IF NOT EXISTS departments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL UNIQUE,
-  description TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- =========================================================
+-- UML INHERITANCE SPECIALIZATION TABLES (1:1 strict)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS admins (
+  id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS employees (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  employee_code TEXT UNIQUE,
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  birth_date DATE NOT NULL,
-  cnss_number TEXT UNIQUE NOT NULL,
-  personal_email TEXT UNIQUE NOT NULL,
-  work_email TEXT UNIQUE NOT NULL,
-  mobile_phone TEXT,
-  fixed_phone TEXT,
-  postal_address TEXT,
-  iban TEXT,
-  bic_swift TEXT,
-  bank_name TEXT,
-  job_title TEXT NOT NULL,
-  role_function TEXT,
-  department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
-  manager_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  current_pto_balance_days NUMERIC(8,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT employees_personal_email_format_chk CHECK (POSITION('@' IN personal_email) > 1),
-  CONSTRAINT employees_work_email_format_chk CHECK (POSITION('@' IN work_email) > 1),
-  CONSTRAINT employees_no_self_manager_chk CHECK (manager_id IS NULL OR manager_id <> id)
+CREATE TABLE IF NOT EXISTS managers (
+  id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS hierarchy (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  manager_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
-  started_at DATE NOT NULL,
-  ended_at DATE,
-  reason TEXT,
+CREATE TABLE IF NOT EXISTS collaborators (
+  id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  manager_id UUID NOT NULL REFERENCES managers(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT hierarchy_period_chk CHECK (ended_at IS NULL OR ended_at >= started_at),
-  CONSTRAINT hierarchy_no_self_relation_chk CHECK (employee_id <> manager_id)
+  CONSTRAINT collaborators_no_self_manager_chk CHECK (id <> manager_id)
 );
 
 -- =========================================================
--- EMPLOYMENT / COMPENSATION TABLES
+-- FUNCTIONAL MODULES
 -- =========================================================
 CREATE TABLE IF NOT EXISTS contracts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  contract_type employment_type NOT NULL,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contract_type contract_type NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE,
-  weekly_hours NUMERIC(5,2) NOT NULL,
-  gross_monthly_salary NUMERIC(12,2),
-  net_monthly_salary NUMERIC(12,2),
-  bonuses NUMERIC(12,2) NOT NULL DEFAULT 0,
+  weekly_hours NUMERIC(5,2),
+  base_salary NUMERIC(12,2),
+  net_salary NUMERIC(12,2),
+  bonuses NUMERIC(12,2),
   benefits_in_kind TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT contracts_dates_chk CHECK (end_date IS NULL OR end_date >= start_date),
-  CONSTRAINT contracts_weekly_hours_chk CHECK (weekly_hours > 0)
+  CONSTRAINT contracts_dates_chk CHECK (end_date IS NULL OR end_date >= start_date)
 );
 
 CREATE TABLE IF NOT EXISTS salary_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  contract_id UUID REFERENCES contracts(id) ON DELETE SET NULL,
-  effective_date DATE NOT NULL,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  validated_by UUID REFERENCES managers(id) ON DELETE SET NULL,
   old_salary NUMERIC(12,2) NOT NULL,
   new_salary NUMERIC(12,2) NOT NULL,
-  increase_percent NUMERIC(6,2),
-  reason TEXT,
-  approved_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  change_date DATE NOT NULL,
+  status approval_status NOT NULL DEFAULT 'VALIDATED',
+  decision_comment TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT salary_history_non_negative_chk CHECK (old_salary >= 0 AND new_salary >= 0)
 );
 
--- =========================================================
--- PROJECTS / ASSIGNMENTS
--- =========================================================
-CREATE TABLE IF NOT EXISTS projects (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  description TEXT,
-  client_name TEXT,
-  start_date DATE,
-  end_date DATE,
-  status project_status NOT NULL DEFAULT 'IN_PROGRESS',
-  budget_hours NUMERIC(10,2),
-  budget_amount NUMERIC(14,2),
-  project_manager_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT projects_dates_chk CHECK (end_date IS NULL OR start_date IS NULL OR end_date >= start_date),
-  CONSTRAINT projects_budget_chk CHECK (
-    (budget_hours IS NULL OR budget_hours >= 0) AND
-    (budget_amount IS NULL OR budget_amount >= 0)
-  )
-);
-
-CREATE TABLE IF NOT EXISTS project_assignments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  role_on_project TEXT,
-  assigned_at DATE NOT NULL DEFAULT CURRENT_DATE,
-  released_at DATE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT project_assignments_dates_chk CHECK (released_at IS NULL OR released_at >= assigned_at),
-  CONSTRAINT project_assignments_unique_active UNIQUE (project_id, employee_id, assigned_at)
-);
-
--- =========================================================
--- TIMESHEETS
--- =========================================================
-CREATE TABLE IF NOT EXISTS timesheets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  week_start_date DATE NOT NULL,
-  week_end_date DATE NOT NULL,
-  status timesheet_status NOT NULL DEFAULT 'DRAFT',
-  submitted_at TIMESTAMPTZ,
-  reviewed_at TIMESTAMPTZ,
-  reviewed_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  reviewer_comment TEXT,
-  is_locked BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT timesheets_week_range_chk CHECK (week_end_date >= week_start_date),
-  CONSTRAINT timesheets_unique_employee_week UNIQUE (employee_id, week_start_date)
-);
-
-CREATE TABLE IF NOT EXISTS timesheet_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  timesheet_id UUID NOT NULL REFERENCES timesheets(id) ON DELETE CASCADE,
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
-  entry_date DATE NOT NULL,
-  task_label TEXT,
-  activity_description TEXT,
-  hours_worked NUMERIC(5,2) NOT NULL,
-  overtime_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
-  is_overtime BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT timesheet_entries_hours_chk CHECK (
-    hours_worked >= 0 AND overtime_hours >= 0 AND hours_worked <= 24
-  )
-);
-
--- =========================================================
--- LEAVE MANAGEMENT
--- =========================================================
 CREATE TABLE IF NOT EXISTS leave_balances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  leave_year INTEGER NOT NULL,
-  leave_type leave_type NOT NULL DEFAULT 'PTO',
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
   allocated_days NUMERIC(8,2) NOT NULL DEFAULT 0,
-  carried_over_days NUMERIC(8,2) NOT NULL DEFAULT 0,
   used_days NUMERIC(8,2) NOT NULL DEFAULT 0,
   pending_days NUMERIC(8,2) NOT NULL DEFAULT 0,
   remaining_days NUMERIC(8,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT leave_balances_unique_year_type UNIQUE (employee_id, leave_year, leave_type)
+  CONSTRAINT leave_balances_unique_user_year UNIQUE (user_id, year)
 );
 
-CREATE TABLE IF NOT EXISTS holidays (
+CREATE TABLE IF NOT EXISTS timesheets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  holiday_date DATE NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  country_code TEXT DEFAULT 'MA',
-  is_variable_date BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS leave_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  leave_type leave_type NOT NULL,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  working_days_count NUMERIC(6,2) NOT NULL DEFAULT 0,
-  reason TEXT,
-  status leave_request_status NOT NULL DEFAULT 'DRAFT',
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  decided_by UUID REFERENCES managers(id) ON DELETE SET NULL,
+  week_start_date DATE NOT NULL,
+  status timesheet_status NOT NULL DEFAULT 'DRAFT',
   submitted_at TIMESTAMPTZ,
-  reviewed_at TIMESTAMPTZ,
-  reviewed_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  reviewer_comment TEXT,
-  medical_document_id UUID,
+  decision_comment TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT leave_requests_dates_chk CHECK (end_date >= start_date)
+  CONSTRAINT timesheets_unique_user_week UNIQUE (user_id, week_start_date)
 );
 
--- =========================================================
--- PERFORMANCE
--- =========================================================
+CREATE TABLE IF NOT EXISTS projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE,
+  name TEXT,
+  status project_status NOT NULL DEFAULT 'IN_PROGRESS',
+  start_date DATE,
+  end_date DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT projects_dates_chk CHECK (end_date IS NULL OR start_date IS NULL OR end_date >= start_date)
+);
+
+CREATE TABLE IF NOT EXISTS project_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  collaborator_id UUID NOT NULL REFERENCES collaborators(id) ON DELETE CASCADE,
+  role_on_project TEXT,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  unassigned_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT project_assignments_dates_chk CHECK (unassigned_at IS NULL OR unassigned_at >= assigned_at)
+);
+
+-- One active assignment max for each (project, collaborator)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_project_assignments_active
+ON project_assignments(project_id, collaborator_id)
+WHERE unassigned_at IS NULL;
+
+-- Single-table inheritance for leave + augmentation requests
+CREATE TABLE IF NOT EXISTS requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  submitted_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  decided_by UUID REFERENCES managers(id) ON DELETE SET NULL,
+  request_type request_type NOT NULL,
+  status request_status NOT NULL DEFAULT 'DRAFT',
+  comment TEXT,
+  decision_comment TEXT,
+  leave_paid BOOLEAN,
+  leave_start_date DATE,
+  leave_end_date DATE,
+  proposed_salary NUMERIC(12,2),
+  effective_date DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT requests_leave_dates_chk CHECK (leave_end_date IS NULL OR leave_start_date IS NULL OR leave_end_date >= leave_start_date),
+  CONSTRAINT requests_type_consistency_chk CHECK (
+    (request_type = 'LEAVE' AND leave_start_date IS NOT NULL AND leave_end_date IS NOT NULL)
+    OR (request_type = 'AUGMENTATION' AND proposed_salary IS NOT NULL AND effective_date IS NOT NULL)
+    OR (request_type = 'OTHER')
+  )
+);
+
 CREATE TABLE IF NOT EXISTS evaluations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  evaluator_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  evaluation_type evaluation_type NOT NULL,
-  evaluation_date DATE NOT NULL,
-  overall_score NUMERIC(5,2),
-  criteria_json JSONB,
+  manager_id UUID NOT NULL REFERENCES managers(id) ON DELETE CASCADE,
+  collaborator_id UUID NOT NULL REFERENCES collaborators(id) ON DELETE CASCADE,
+  review_date DATE,
+  global_score NUMERIC(5,2),
   comments TEXT,
-  recommendations TEXT,
-  next_period_objectives TEXT,
-  signed_document_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT evaluations_score_chk CHECK (overall_score IS NULL OR (overall_score >= 0 AND overall_score <= 100))
+  CONSTRAINT evaluations_score_chk CHECK (global_score IS NULL OR (global_score >= 0 AND global_score <= 100))
 );
 
--- =========================================================
--- DOCUMENTS
--- =========================================================
 CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
   category document_category NOT NULL,
-  title TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  mime_type TEXT,
-  file_size_bytes BIGINT,
+  title TEXT,
+  description TEXT,
   version_number INTEGER NOT NULL DEFAULT 1,
-  tags TEXT[],
-  uploaded_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  metadata JSONB,
+  original_name TEXT,
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  file_url TEXT,
+  file_type TEXT,
+  file_size BIGINT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT documents_size_chk CHECK (file_size_bytes IS NULL OR file_size_bytes >= 0),
-  CONSTRAINT documents_version_chk CHECK (version_number >= 1)
+  CONSTRAINT documents_file_size_chk CHECK (file_size IS NULL OR file_size >= 0),
+  CONSTRAINT documents_version_chk CHECK (version_number > 0)
 );
 
--- Backfill optional FK references that depend on documents table
-ALTER TABLE leave_requests
-  ADD CONSTRAINT leave_requests_medical_document_id_fkey
-  FOREIGN KEY (medical_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-
-ALTER TABLE evaluations
-  ADD CONSTRAINT evaluations_signed_document_id_fkey
-  FOREIGN KEY (signed_document_id) REFERENCES documents(id) ON DELETE SET NULL;
-
--- =========================================================
--- NOTIFICATIONS / AUDIT
--- =========================================================
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipient_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  sender_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  type notification_type NOT NULL,
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  payload JSONB,
-  is_read BOOLEAN NOT NULL DEFAULT FALSE,
-  read_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  actor_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  action TEXT NOT NULL,
-  entity_type TEXT NOT NULL,
-  entity_id UUID,
-  details JSONB,
-  ip_address INET,
-  user_agent TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel notification_channel NOT NULL,
+  title TEXT,
+  message TEXT,
+  status notification_status NOT NULL DEFAULT 'UNSEEN',
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- =========================================================
 -- INDEXES
 -- =========================================================
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
-CREATE INDEX IF NOT EXISTS idx_users_account_status ON users(account_status);
+CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
+CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id);
+CREATE INDEX IF NOT EXISTS idx_users_personal_email ON users(personal_email);
+CREATE INDEX IF NOT EXISTS idx_users_work_email ON users(work_email);
 
-CREATE INDEX IF NOT EXISTS idx_employees_department_id ON employees(department_id);
-CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);
-CREATE INDEX IF NOT EXISTS idx_employees_last_first_name ON employees(last_name, first_name);
+CREATE INDEX IF NOT EXISTS idx_collaborators_manager_id ON collaborators(manager_id);
 
-CREATE INDEX IF NOT EXISTS idx_contracts_employee_id ON contracts(employee_id);
-CREATE INDEX IF NOT EXISTS idx_contracts_is_active ON contracts(is_active);
-
-CREATE INDEX IF NOT EXISTS idx_salary_history_employee_id ON salary_history(employee_id);
-CREATE INDEX IF NOT EXISTS idx_salary_history_effective_date ON salary_history(effective_date DESC);
-
+CREATE INDEX IF NOT EXISTS idx_contracts_user_id ON contracts(user_id);
+CREATE INDEX IF NOT EXISTS idx_salary_history_user_id ON salary_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_leave_balances_user_year ON leave_balances(user_id, year);
+CREATE INDEX IF NOT EXISTS idx_timesheets_user_status ON timesheets(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
-CREATE INDEX IF NOT EXISTS idx_projects_project_manager_id ON projects(project_manager_id);
-
-CREATE INDEX IF NOT EXISTS idx_project_assignments_project_id ON project_assignments(project_id);
-CREATE INDEX IF NOT EXISTS idx_project_assignments_employee_id ON project_assignments(employee_id);
-
-CREATE INDEX IF NOT EXISTS idx_timesheets_employee_status ON timesheets(employee_id, status);
-CREATE INDEX IF NOT EXISTS idx_timesheets_week_start ON timesheets(week_start_date);
-
-CREATE INDEX IF NOT EXISTS idx_timesheet_entries_timesheet_id ON timesheet_entries(timesheet_id);
-CREATE INDEX IF NOT EXISTS idx_timesheet_entries_employee_id ON timesheet_entries(employee_id);
-CREATE INDEX IF NOT EXISTS idx_timesheet_entries_project_id ON timesheet_entries(project_id);
-CREATE INDEX IF NOT EXISTS idx_timesheet_entries_entry_date ON timesheet_entries(entry_date);
-
-CREATE INDEX IF NOT EXISTS idx_leave_balances_employee_year ON leave_balances(employee_id, leave_year);
-CREATE INDEX IF NOT EXISTS idx_leave_requests_employee_status ON leave_requests(employee_id, status);
-CREATE INDEX IF NOT EXISTS idx_leave_requests_period ON leave_requests(start_date, end_date);
-
-CREATE INDEX IF NOT EXISTS idx_evaluations_employee_id ON evaluations(employee_id);
-CREATE INDEX IF NOT EXISTS idx_evaluations_date ON evaluations(evaluation_date DESC);
-
-CREATE INDEX IF NOT EXISTS idx_documents_employee_id ON documents(employee_id);
+CREATE INDEX IF NOT EXISTS idx_project_assignments_project ON project_assignments(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_assignments_collaborator ON project_assignments(collaborator_id);
+CREATE INDEX IF NOT EXISTS idx_requests_submitted_by ON requests(submitted_by);
+CREATE INDEX IF NOT EXISTS idx_requests_decided_by ON requests(decided_by);
+CREATE INDEX IF NOT EXISTS idx_requests_type_status ON requests(request_type, status);
+CREATE INDEX IF NOT EXISTS idx_evaluations_manager ON evaluations(manager_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_collaborator ON evaluations(collaborator_id);
+CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
-CREATE INDEX IF NOT EXISTS idx_documents_tags_gin ON documents USING GIN(tags);
-
-CREATE INDEX IF NOT EXISTS idx_notifications_recipient_is_read ON notifications(recipient_user_id, is_read);
-CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user_id ON audit_logs(actor_user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_user_title_category_version ON documents(user_id, title, category, version_number);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_status ON notifications(recipient_id, status);
 
 -- =========================================================
 -- UPDATED_AT TRIGGERS
 -- =========================================================
-DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
-CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 DROP TRIGGER IF EXISTS trg_departments_updated_at ON departments;
 CREATE TRIGGER trg_departments_updated_at BEFORE UPDATE ON departments
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_employees_updated_at ON employees;
-CREATE TRIGGER trg_employees_updated_at BEFORE UPDATE ON employees
+DROP TRIGGER IF EXISTS trg_roles_updated_at ON roles;
+CREATE TRIGGER trg_roles_updated_at BEFORE UPDATE ON roles
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
+CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_contracts_updated_at ON contracts;
 CREATE TRIGGER trg_contracts_updated_at BEFORE UPDATE ON contracts
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_salary_history_updated_at ON salary_history;
+CREATE TRIGGER trg_salary_history_updated_at BEFORE UPDATE ON salary_history
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_leave_balances_updated_at ON leave_balances;
+CREATE TRIGGER trg_leave_balances_updated_at BEFORE UPDATE ON leave_balances
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_timesheets_updated_at ON timesheets;
+CREATE TRIGGER trg_timesheets_updated_at BEFORE UPDATE ON timesheets
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_projects_updated_at ON projects;
@@ -503,24 +390,8 @@ DROP TRIGGER IF EXISTS trg_project_assignments_updated_at ON project_assignments
 CREATE TRIGGER trg_project_assignments_updated_at BEFORE UPDATE ON project_assignments
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_timesheets_updated_at ON timesheets;
-CREATE TRIGGER trg_timesheets_updated_at BEFORE UPDATE ON timesheets
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_timesheet_entries_updated_at ON timesheet_entries;
-CREATE TRIGGER trg_timesheet_entries_updated_at BEFORE UPDATE ON timesheet_entries
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_leave_balances_updated_at ON leave_balances;
-CREATE TRIGGER trg_leave_balances_updated_at BEFORE UPDATE ON leave_balances
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_holidays_updated_at ON holidays;
-CREATE TRIGGER trg_holidays_updated_at BEFORE UPDATE ON holidays
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_leave_requests_updated_at ON leave_requests;
-CREATE TRIGGER trg_leave_requests_updated_at BEFORE UPDATE ON leave_requests
+DROP TRIGGER IF EXISTS trg_requests_updated_at ON requests;
+CREATE TRIGGER trg_requests_updated_at BEFORE UPDATE ON requests
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_evaluations_updated_at ON evaluations;
@@ -530,5 +401,132 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS trg_documents_updated_at ON documents;
 CREATE TRIGGER trg_documents_updated_at BEFORE UPDATE ON documents
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_notifications_updated_at ON notifications;
+CREATE TRIGGER trg_notifications_updated_at BEFORE UPDATE ON notifications
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- =========================================================
+-- RLS BASELINE (Collaborator / Manager / Admin)
+-- =========================================================
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE timesheets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_assignments ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.current_user_role()
+RETURNS TEXT
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT r.description
+  FROM public.users u
+  LEFT JOIN public.roles r ON r.id = u.role_id
+  WHERE u.id = auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT COALESCE(public.current_user_role() ILIKE 'admin%', FALSE);
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_manager()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT COALESCE(public.current_user_role() ILIKE 'manager%', FALSE);
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'users' AND policyname = 'users_select_policy'
+  ) THEN
+    CREATE POLICY users_select_policy ON users
+      FOR SELECT
+      USING (
+        auth.uid() = id
+        OR public.is_admin()
+        OR (
+          public.is_manager()
+          AND EXISTS (
+            SELECT 1
+            FROM collaborators c
+            WHERE c.id = users.id AND c.manager_id = auth.uid()
+          )
+        )
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'timesheets' AND policyname = 'timesheets_policy'
+  ) THEN
+    CREATE POLICY timesheets_policy ON timesheets
+      FOR ALL
+      USING (
+        auth.uid() = user_id
+        OR public.is_admin()
+        OR (
+          public.is_manager()
+          AND EXISTS (
+            SELECT 1
+            FROM collaborators c
+            WHERE c.id = timesheets.user_id AND c.manager_id = auth.uid()
+          )
+        )
+      )
+      WITH CHECK (
+        auth.uid() = user_id
+        OR public.is_admin()
+        OR (
+          public.is_manager()
+          AND EXISTS (
+            SELECT 1
+            FROM collaborators c
+            WHERE c.id = timesheets.user_id AND c.manager_id = auth.uid()
+          )
+        )
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'requests' AND policyname = 'requests_policy'
+  ) THEN
+    CREATE POLICY requests_policy ON requests
+      FOR ALL
+      USING (
+        auth.uid() = submitted_by
+        OR public.is_admin()
+        OR (
+          public.is_manager()
+          AND EXISTS (
+            SELECT 1
+            FROM collaborators c
+            WHERE c.id = requests.submitted_by AND c.manager_id = auth.uid()
+          )
+        )
+      )
+      WITH CHECK (
+        auth.uid() = submitted_by
+        OR public.is_admin()
+        OR (
+          public.is_manager()
+          AND EXISTS (
+            SELECT 1
+            FROM collaborators c
+            WHERE c.id = requests.submitted_by AND c.manager_id = auth.uid()
+          )
+        )
+      );
+  END IF;
+END$$;
 
 COMMIT;

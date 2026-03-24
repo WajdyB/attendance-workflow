@@ -1,7 +1,6 @@
 "use client";
 
-import EmployeeProfile from "@/app/components/settings/profile";
-import RecentDocuments from "@/app/components/settings/documents";
+import EmployeeProfile from "@/components/settings/profile";
 
 export default function ProfilePage() {
   return (
@@ -13,3 +12,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

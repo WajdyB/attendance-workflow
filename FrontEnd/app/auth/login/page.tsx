@@ -5,9 +5,10 @@ import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/context/AuthContext";
-import { apiConfig } from "@/app/utils/api-config";
+import { useAuth } from "@/context/AuthContext";
+import { apiConfig } from "@/utils/api-config";
 import Link from "next/link";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,6 +30,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { login, isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   // Redirect if already authenticated
@@ -44,7 +46,7 @@ export default function LoginPage() {
     setError(null);
 
     if (!email || !password) {
-      setError("Please fill in all fields");
+      setError(t("auth.login.fillAll"));
       return;
     }
 
@@ -62,7 +64,17 @@ export default function LoginPage() {
         }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+      const data = isJson ? await res.json() : null;
+
+      if (!isJson) {
+        setError(
+          t("auth.login.invalidResponse").replace("{baseUrl}", apiConfig.baseUrl),
+        );
+        setIsLoading(false);
+        return;
+      }
 
       if (!res.ok) {
         setError(data.message || "Login failed. Please try again.");
@@ -74,7 +86,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (error) {
-      setError("Network error. Please check your connection.");
+      setError(t("auth.login.network"));
       setIsLoading(false);
       console.error("Login error:", error);
     }
@@ -98,7 +110,7 @@ export default function LoginPage() {
 
         <form className="space-y-4" onSubmit={handleLogin}>
           <div>
-            <label className="text-sm font-medium text-stone-700">Email Address</label>
+            <label className="text-sm font-medium text-stone-700">{t("auth.login.email")}</label>
             <div className="mt-1 flex items-center rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2.5 focus-within:border-orange-300">
               <Mail size={16} className="mr-2 text-orange-500" />
               <input
@@ -115,12 +127,12 @@ export default function LoginPage() {
 
           <div>
             <div className="flex justify-between text-sm">
-              <label className="font-medium text-stone-700">Password</label>
+              <label className="font-medium text-stone-700">{t("auth.login.password")}</label>
               <Link
                 href="/auth/forget-password"
                 className="font-medium text-orange-700 hover:text-orange-800 hover:underline"
               >
-                Forgot password?
+                {t("auth.login.forgot")}
               </Link>
             </div>
 
@@ -154,7 +166,7 @@ export default function LoginPage() {
               className="mr-2 h-4 w-4 rounded border-orange-300 text-orange-600 focus:ring-orange-200"
               disabled={isLoading}
             />
-            Keep me logged in
+            {t("auth.login.remember")}
           </label>
 
           <button
@@ -172,10 +184,10 @@ export default function LoginPage() {
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                Logging in...
+                {t("auth.login.loading")}
               </>
             ) : (
-              "Sign In"
+              t("auth.login.submit")
             )}
           </button>
         </form>
@@ -183,3 +195,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

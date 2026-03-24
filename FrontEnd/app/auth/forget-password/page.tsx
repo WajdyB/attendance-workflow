@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { Mail, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { apiConfig } from "@/app/utils/api-config";
+import { apiConfig } from "@/utils/api-config";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function ForgotPasswordPage() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -16,7 +18,7 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     if (!email) {
-      setError("Please enter your email address");
+      setError(t("auth.login.fillAll"));
       return;
     }
 
@@ -61,17 +63,17 @@ export default function ForgotPasswordPage() {
 
           {/* Title */}
           <h2 className="text-2xl font-semibold text-stone-900 text-center">
-            Check your email
+            {t("auth.forgot.checkEmail")}
           </h2>
 
           <p className="mt-4 text-sm text-stone-600 text-center">
-            We have sent a password reset link to your email address. Please check your inbox and follow the instructions to reset your password.
+            {t("auth.forgot.checkEmailBody")}
           </p>
 
           {/* Tip Box */}
           <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
             <p className="text-sm text-orange-800">
-              <strong>Tip:</strong> The reset link will expire in 24 hours. If you do not see the email, check your spam folder.
+              <strong>Tip:</strong> {t("auth.forgot.tip")}
             </p>
           </div>
 
@@ -82,7 +84,7 @@ export default function ForgotPasswordPage() {
               href="/auth/login"
               className="text-sm font-medium text-orange-700 hover:text-orange-800 hover:underline"
             >
-              Back to login
+              {t("auth.forgot.backToLogin")}
             </Link>
           </div>
         </div>
@@ -95,11 +97,11 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md rounded-2xl border border-orange-100 bg-white p-8 shadow-sm">
         {/* Title */}
         <h2 className="text-2xl font-semibold text-stone-900">
-          Forgot password?
+          {t("auth.forgot.title")}
         </h2>
 
         <p className="mt-2 mb-6 text-sm text-stone-600">
-          No worries, we’ll send you reset instructions.
+          {t("auth.forgot.subtitle")}
         </p>
 
         {/* Error Message */}
@@ -114,7 +116,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="mb-2 block text-sm font-medium text-stone-700">
-              Email Address
+              {t("auth.forgot.email")}
             </label>
 
             <div className="flex items-center rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2.5">
@@ -147,12 +149,12 @@ export default function ForgotPasswordPage() {
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                Sending...
+                {t("auth.forgot.sending")}
               </>
             ) : (
               <>
                 <Mail size={18} />
-                Send Reset Link
+                {t("auth.forgot.submit")}
               </>
             )}
           </button>
@@ -164,10 +166,11 @@ export default function ForgotPasswordPage() {
             href="/auth/login"
             className="text-sm text-orange-700 hover:text-orange-800 hover:underline"
           >
-            ← Back to login
+            {t("auth.forgot.back")}
           </Link>
         </div>
       </div>
     </div>
   );
 }
+

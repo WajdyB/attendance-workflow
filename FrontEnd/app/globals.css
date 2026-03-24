@@ -1,8 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fff7ed;
-  --foreground: #1c1917;
+  --background: #050505;
+  --foreground: #f5f5f5;
+  --panel: rgba(17, 17, 17, 0.88);
+  --panel-hover: rgba(24, 24, 24, 0.95);
+  --muted: #d4d4d4;
+  --accent: #fb923c;
+  --accent-strong: #f97316;
+  --separator: rgba(251, 146, 60, 0.16);
 }
 
 @theme inline {
@@ -15,7 +21,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Poppins", Arial, Helvetica, sans-serif;
 }
 
 html {
@@ -23,6 +29,92 @@ html {
 }
 
 ::selection {
-  background: #fed7aa;
-  color: #7c2d12;
+  background: #f97316;
+  color: #fff;
+}
+
+[class*="bg-white"] {
+  background-color: var(--panel) !important;
+}
+
+[class*="text-stone-900"],
+[class*="text-stone-800"],
+[class*="text-stone-700"],
+[class*="text-stone-600"],
+[class*="text-stone-500"] {
+  color: var(--foreground) !important;
+}
+
+[class*="text-stone-400"] {
+  color: var(--muted) !important;
+}
+
+[class*="border-orange-50"],
+[class*="border-orange-100"],
+[class*="border-orange-200"],
+[class*="border-orange-300"] {
+  border-color: var(--separator) !important;
+}
+
+[class*="bg-orange-50"],
+[class*="bg-orange-100"] {
+  background-color: rgba(251, 146, 60, 0.1) !important;
+}
+
+[class*="bg-stone-50"],
+[class*="bg-stone-100"] {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+[class*="text-orange-800"],
+[class*="text-orange-700"] {
+  color: #fdba74 !important;
+}
+
+[class*="text-orange-600"],
+[class*="text-orange-500"] {
+  color: #fb923c !important;
+}
+
+[class*="hover:bg-stone-100"]:hover,
+[class*="hover:bg-orange-50"]:hover {
+  background-color: rgba(251, 146, 60, 0.12) !important;
+}
+
+[class*="from-orange-50"] {
+  --tw-gradient-from: #050505 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(5 5 5 / 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+[class*="to-white"] {
+  --tw-gradient-to: #0b0b0b var(--tw-gradient-to-position) !important;
+}
+
+[class*="shadow-sm"],
+[class*="shadow-md"],
+[class*="shadow-lg"] {
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35) !important;
+}
+
+input,
+select,
+textarea {
+  color: #fff !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #a3a3a3 !important;
+}
+
+input,
+select,
+textarea,
+button {
+  border-color: var(--separator);
+}
+
+button:hover {
+  transition: all 0.2s ease;
 }

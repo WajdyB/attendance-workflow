@@ -1,4 +1,4 @@
-import Dashboard from "@/app/components/dashboard";
+import Dashboard from "@/components/dashboard";
 
 export default function DashboardPage() {
   return (
@@ -7,3 +7,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

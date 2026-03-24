@@ -46,7 +46,8 @@ async function bootstrap() {
   );
 
   // Configure CORS with environment variable
-  const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3001';
+  const corsOrigin =
+    process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001';
   app.enableCors({
     origin: corsOrigin.split(',').map((origin) => origin.trim()),
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
@@ -55,7 +56,7 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`Application running on http://localhost:${port}`);
 }

@@ -5,6 +5,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 
@@ -70,7 +71,7 @@ export class DepartmentsService {
       });
 
       // Transform to include user count
-      return departments.map((dept: { users: string | any[] }) => ({
+      return departments.map((dept) => ({
         ...dept,
         userCount: dept.users.length,
         users: undefined, // Remove users array from response
@@ -96,7 +97,6 @@ export class DepartmentsService {
               lastName: true,
               jobTitle: true,
               workEmail: true,
-              avatarUrl: true,
             },
           },
         },
@@ -122,7 +122,7 @@ export class DepartmentsService {
     }
   }
 
-  async update(id: string, updateDepartmentDto: any) {
+  async update(id: string, updateDepartmentDto: Prisma.DepartmentUpdateInput) {
     try {
       // Check if department exists
       const existingDept = await this.prisma.department.findUnique({
@@ -133,19 +133,19 @@ export class DepartmentsService {
         throw new NotFoundException(`Department with ID ${id} not found`);
       }
 
+      const nextCode =
+        typeof updateDepartmentDto.code === 'string'
+          ? updateDepartmentDto.code
+          : updateDepartmentDto.code?.set;
+
       // If code is being updated, check it's not taken
-      if (
-        updateDepartmentDto.code &&
-        updateDepartmentDto.code !== existingDept.code
-      ) {
+      if (nextCode && nextCode !== existingDept.code) {
         const codeTaken = await this.prisma.department.findUnique({
-          where: { code: updateDepartmentDto.code },
+          where: { code: nextCode },
         });
 
         if (codeTaken) {
-          throw new BadRequestException(
-            `Code ${updateDepartmentDto.code} is already in use`,
-          );
+          throw new BadRequestException(`Code ${nextCode} is already in use`);
         }
       }
 

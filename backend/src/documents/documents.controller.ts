@@ -15,8 +15,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { RequireRoles } from '../common/decorator/roles.decorator';
-import { Role } from '../common/enums/role.enum';
 import { DocumentCategory } from '@prisma/client';
 
 @Controller('documents')
@@ -39,8 +37,26 @@ export class DocumentsController {
   }
 
   @Get('getdocuments/:userId')
-  async getUserDocuments(@Param('userId') userId: string) {
-    return this.documentsService.getUserDocuments(userId);
+  async getUserDocuments(
+    @Param('userId') userId: string,
+    @Query('category') category?: DocumentCategory,
+    @Query('search') search?: string,
+    @Query('tag') tag?: string,
+  ) {
+    return this.documentsService.getUserDocuments(userId, {
+      category,
+      search,
+      tag,
+    });
+  }
+
+  @Get('getdocuments/:userId/versions')
+  async getDocumentVersions(
+    @Param('userId') userId: string,
+    @Query('title') title?: string,
+    @Query('category') category?: DocumentCategory,
+  ) {
+    return this.documentsService.getDocumentVersions(userId, title, category);
   }
 
   @Get('getdocuments/:userId/category')
@@ -59,7 +75,6 @@ export class DocumentsController {
   @Delete('deletedocument/:id/:userId')
   async deleteDocument(
     @Param('id') id: string,
-
     @Param('userId') userId: string,
   ) {
     return this.documentsService.deleteDocument(id, userId);
