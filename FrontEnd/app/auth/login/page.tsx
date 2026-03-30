@@ -1,7 +1,7 @@
 // app/auth/login/page.tsx
 "use client";
 
-import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -15,10 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
+    if (typeof window === "undefined") return false;
     const storageMode = localStorage.getItem("authStorage");
     return (
       storageMode === "local" &&
@@ -33,16 +30,12 @@ export default function LoginPage() {
   const { t } = useLanguage();
   const router = useRouter();
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push("/dashboard");
-    }
+    if (isAuthenticated) router.push("/dashboard");
   }, [isAuthenticated, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setError(null);
 
     if (!email || !password) {
@@ -55,13 +48,8 @@ export default function LoginPage() {
     try {
       const res = await fetch(apiConfig.endpoints.auth.login, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
       const contentType = res.headers.get("content-type") || "";
@@ -69,9 +57,7 @@ export default function LoginPage() {
       const data = isJson ? await res.json() : null;
 
       if (!isJson) {
-        setError(
-          t("auth.login.invalidResponse").replace("{baseUrl}", apiConfig.baseUrl),
-        );
+        setError(t("auth.login.invalidResponse").replace("{baseUrl}", apiConfig.baseUrl));
         setIsLoading(false);
         return;
       }
@@ -80,9 +66,7 @@ export default function LoginPage() {
         setError(data.message || "Login failed. Please try again.");
         setIsLoading(false);
       } else {
-        // Use context login with the full response
         login(data, rememberMe);
-        // Navigate using router instead of window.location
         router.push("/dashboard");
       }
     } catch (error) {
@@ -93,30 +77,87 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white px-4 py-8 md:px-6 md:py-14">
-      <div className="mx-auto w-full max-w-md rounded-3xl border border-orange-100 bg-white p-7 shadow-sm md:p-10">
-        <div className="mb-8 flex items-center justify-center gap-3">
-          <div className="rounded-xl bg-orange-100 p-2">
-            <Image src="/logos/logo.svg" alt="Logo" width={34} height={34} />
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12"
+      style={{ background: "var(--bg)" }}
+    >
+      {/* Back to home */}
+      <div className="w-full max-w-sm mb-6">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm transition"
+          style={{ color: "var(--text-3)" }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-1)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-3)")}
+        >
+          <ArrowLeft size={14} />
+          {t("auth.login.backHome")}
+        </Link>
+      </div>
+
+      {/* Card */}
+      <div
+        className="w-full max-w-sm rounded-2xl p-8"
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border-strong)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        }}
+      >
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-2xl"
+            style={{ background: "var(--accent-dim)" }}
+          >
+            <Image src="/logos/logo.svg" alt="RHpro" width={26} height={26} />
           </div>
-          <h1 className="text-xl font-semibold text-stone-900">RHpro</h1>
+          <div className="text-center">
+            <h1 className="text-lg font-semibold" style={{ color: "var(--text-1)" }}>
+              Connexion à RHpro
+            </h1>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>
+              {t("auth.login.subtitle") || "Plateforme de gestion RH"}
+            </p>
+          </div>
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div
+            className="mb-5 rounded-xl p-3 text-sm"
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.2)",
+              color: "#f87171",
+            }}
+          >
             {error}
           </div>
         )}
 
         <form className="space-y-4" onSubmit={handleLogin}>
+          {/* Email */}
           <div>
-            <label className="text-sm font-medium text-stone-700">{t("auth.login.email")}</label>
-            <div className="mt-1 flex items-center rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2.5 focus-within:border-orange-300">
-              <Mail size={16} className="mr-2 text-orange-500" />
+            <label
+              className="block text-xs font-medium mb-1.5"
+              style={{ color: "var(--text-2)" }}
+            >
+              {t("auth.login.email")}
+            </label>
+            <div
+              className="flex items-center rounded-xl px-3 py-2.5 gap-2"
+              style={{
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border-strong)",
+              }}
+            >
+              <Mail size={15} style={{ color: "var(--accent)", flexShrink: 0 }} />
               <input
                 type="email"
                 placeholder="name@company.com"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-stone-400"
+                className="w-full bg-transparent text-sm outline-none"
+                style={{ border: "none !important", boxShadow: "none !important", background: "transparent !important" }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
@@ -125,23 +166,33 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Password */}
           <div>
-            <div className="flex justify-between text-sm">
-              <label className="font-medium text-stone-700">{t("auth.login.password")}</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium" style={{ color: "var(--text-2)" }}>
+                {t("auth.login.password")}
+              </label>
               <Link
                 href="/auth/forget-password"
-                className="font-medium text-orange-700 hover:text-orange-800 hover:underline"
+                className="text-xs transition"
+                style={{ color: "var(--accent)" }}
               >
                 {t("auth.login.forgot")}
               </Link>
             </div>
-
-            <div className="mt-1 flex items-center rounded-lg border border-orange-200 bg-orange-50/40 px-3 py-2.5 focus-within:border-orange-300">
-              <Lock size={16} className="mr-2 text-orange-500" />
+            <div
+              className="flex items-center rounded-xl px-3 py-2.5 gap-2"
+              style={{
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border-strong)",
+              }}
+            >
+              <Lock size={15} style={{ color: "var(--accent)", flexShrink: 0 }} />
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-stone-400"
+                className="w-full bg-transparent text-sm outline-none flex-1"
+                style={{ border: "none !important", boxShadow: "none !important", background: "transparent !important" }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
@@ -150,40 +201,38 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="text-stone-400 hover:text-stone-700"
+                className="flex-shrink-0 transition cursor-pointer disabled:opacity-40"
+                style={{ color: "var(--text-3)" }}
                 disabled={isLoading}
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
           </div>
 
-          <label className="flex items-center text-sm text-stone-600">
+          {/* Remember me */}
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="mr-2 h-4 w-4 rounded border-orange-300 text-orange-600 focus:ring-orange-200"
+              className="rounded"
+              style={{ accentColor: "var(--accent)" }}
               disabled={isLoading}
             />
-            {t("auth.login.remember")}
+            <span style={{ color: "var(--text-3)" }}>{t("auth.login.remember")}</span>
           </label>
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={isLoading}
-            className={`
-              flex w-full items-center justify-center gap-2 rounded-lg py-2.5 font-medium text-white transition
-              ${
-                isLoading
-                  ? "cursor-not-allowed bg-orange-300"
-                  : "bg-orange-600 hover:bg-orange-700"
-              }
-            `}
+            className="btn-primary w-full justify-center py-2.5"
+            style={{ marginTop: 8 }}
           >
             {isLoading ? (
               <>
-                <Loader2 size={18} className="animate-spin" />
+                <Loader2 size={16} className="animate-spin" />
                 {t("auth.login.loading")}
               </>
             ) : (
@@ -195,4 +244,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

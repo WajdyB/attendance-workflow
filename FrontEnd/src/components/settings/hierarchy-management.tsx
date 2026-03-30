@@ -263,13 +263,13 @@ export default function HierarchyManagement() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => void loadData()}
-            className="px-3 py-2 text-sm rounded-lg border border-stone-600/50 bg-stone-700/20 text-stone-300 hover:bg-stone-700/30"
+            className="px-3 py-2 text-sm rounded-lg border border-stone-600/50 hover:border-stone-600/70 bg-stone-700/20 hover:bg-stone-700/40 text-stone-300 hover:text-stone-200 transition-all cursor-pointer"
           >
             {labels.refresh}
           </button>
           <button
             onClick={() => router.push("/employees")}
-            className="px-3 py-2 text-sm rounded-lg border border-orange-500/50 bg-orange-500/15 text-orange-300 hover:bg-orange-500/25"
+            className="px-3 py-2 text-sm rounded-lg border border-orange-500/50 hover:border-orange-500/70 bg-orange-500/15 hover:bg-orange-500/35 text-orange-300 hover:text-orange-200 transition-all cursor-pointer"
           >
             {labels.back}
           </button>
@@ -331,7 +331,7 @@ export default function HierarchyManagement() {
               type="button"
               onClick={() => void handleAssign()}
               disabled={isAssigning || !selectedCollaboratorId || !selectedManagerId}
-              className="w-full rounded-lg border border-orange-500/50 bg-orange-500/20 px-3 py-2 text-sm font-medium text-orange-300 transition hover:bg-orange-500/30 disabled:opacity-60"
+              className="w-full rounded-lg border border-orange-500/50 hover:border-orange-500/70 bg-orange-500/20 hover:bg-orange-500/40 px-3 py-2 text-sm font-medium text-orange-300 hover:text-orange-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {labels.assign}
             </button>

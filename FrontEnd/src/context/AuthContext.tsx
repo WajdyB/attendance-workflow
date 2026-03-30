@@ -171,8 +171,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (response: LoginResponse, rememberMe = false) => {
     const { session, user, databaseUser } = response;
 
-    // Log to verify documents are in the response
-    console.log("Login response - documents:", databaseUser.documents);
 
     const refreshToken = session.refreshToken ?? session.refresh_token;
     const storageMode: StorageMode = rememberMe ? "local" : "session";

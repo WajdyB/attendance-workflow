@@ -1,273 +1,244 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
-import { LogOut, Bell } from "lucide-react";
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import { useLanguage } from "@/context/LanguageContext";
+import { usePathname } from "next/navigation";
+import { LogOut, Bell, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
+
+const ROUTE_TITLES: Record<string, string> = {
+  "/dashboard":    "Dashboard",
+  "/employees":    "Employés",
+  "/projects":     "Projets",
+  "/timesheets":   "Feuilles de temps",
+  "/roles-depots": "Rôles & Départements",
+  "/requests":     "Congés & Absences",
+  "/approvals":    "Approbations",
+  "/performance":  "Performance",
+  "/profile":      "Mon dossier",
+};
+
+interface Notification {
+  id: number;
+  message: string;
+  read: boolean;
+  time: string;
+  type: "approval" | "deadline" | "request" | "meeting";
+}
+
+const MOCK_NOTIFICATIONS: Notification[] = [
+  { id: 1, message: "Nouvelle feuille de temps à approuver", read: false, time: "5 min", type: "approval" },
+  { id: 2, message: "Échéance projet demain", read: false, time: "1h", type: "deadline" },
+  { id: 3, message: "Demande de congé en attente", read: true, time: "2h", type: "request" },
+  { id: 4, message: "Réunion d'équipe à 15h", read: false, time: "30 min", type: "meeting" },
+];
 
 export default function Navbar() {
   const { user, databaseUser, logout } = useAuth();
   const { t } = useLanguage();
-  const [showNotifications, setShowNotifications] = useState(false);
+  const pathname = usePathname();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // State for notifications
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      message: "New timesheet approval needed",
-      read: false,
-      time: "5 min ago",
-      type: "approval",
-    },
-    {
-      id: 2,
-      message: "Project deadline tomorrow",
-      read: false,
-      time: "1 hour ago",
-      type: "deadline",
-    },
-    {
-      id: 3,
-      message: "Leave request pending",
-      read: true,
-      time: "2 hours ago",
-      type: "request",
-    },
-    {
-      id: 4,
-      message: "Team meeting at 3 PM",
-      read: false,
-      time: "30 min ago",
-      type: "meeting",
-    },
-  ]);
+  const unread = notifications.filter((n) => !n.read).length;
 
-  // Calculate unread count
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const pageTitle =
+    ROUTE_TITLES[pathname] ??
+    Object.entries(ROUTE_TITLES).find(([k]) => pathname.startsWith(k))?.[1] ??
+    "Dashboard";
 
-  // Mark notification as read
-  const markAsRead = (id: number) => {
-    setNotifications(
-      notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-    );
-  };
+  const displayName =
+    databaseUser?.firstName && databaseUser?.lastName
+      ? `${databaseUser.firstName} ${databaseUser.lastName}`
+      : user?.email?.split("@")[0] ?? "Utilisateur";
 
-  // Mark all as read
-  const markAllAsRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
-  };
+  const initials =
+    databaseUser?.firstName && databaseUser?.lastName
+      ? `${databaseUser.firstName[0]}${databaseUser.lastName[0]}`
+      : (user?.email?.[0]?.toUpperCase() ?? "U");
 
-  // Close dropdown when clicking outside
+  const roleLabel = databaseUser?.role?.description ?? "";
+
+  const markAsRead = (id: number) =>
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+
+  const markAllRead = () =>
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+  /* close on outside click */
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        showNotifications &&
-        !(event.target as Element).closest(".notifications-dropdown")
-      ) {
-        setShowNotifications(false);
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setNotificationsOpen(false);
       }
     };
-
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, [showNotifications]);
-
-  // Get notification icon based on type
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case "approval":
-        return "✅";
-      case "deadline":
-        return "⏰";
-      case "request":
-        return "📋";
-      case "meeting":
-        return "📅";
-      default:
-        return "📌";
-    }
-  };
-
-  // Get user initials for avatar
-  const getInitials = () => {
-    if (databaseUser?.firstName && databaseUser?.lastName) {
-      return `${databaseUser.firstName[0]}${databaseUser.lastName[0]}`;
-    }
-    return user?.email?.[0].toUpperCase() || "U";
-  };
-
-  // Get display name
-  const getDisplayName = () => {
-    if (databaseUser?.firstName && databaseUser?.lastName) {
-      return `${databaseUser.firstName} ${databaseUser.lastName}`;
-    }
-    return user?.email?.split("@")[0] || "User";
-  };
-
-  // Get job title or role
-  const getUserTitle = () => {
-    if (databaseUser?.jobTitle) {
-      return databaseUser.jobTitle;
-    }
-    return databaseUser?.role?.description || "Team Member";
-  };
-
-  // Get role badge color based on role
-  const getRoleBadgeColor = () => {
-    const role = databaseUser?.role?.description?.toLowerCase() || "";
-    if (role.includes("admin"))
-      return "border border-orange-300/30 bg-orange-100/20 text-orange-300";
-    if (role.includes("manager"))
-      return "border border-orange-300/20 bg-orange-50/10 text-orange-200";
-    return "border border-orange-300/20 bg-white/40 text-orange-200";
-  };
-
-  // Get initials for avatar display (first letters of first and last name)
-  const avatarInitials = getInitials();
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   return (
-    <div className="flex items-center justify-between border-b border-orange-100/20 bg-white/60 px-6 py-4 backdrop-blur-md">
-      <div>
-        <h1 className="text-lg font-semibold text-orange-300">
-          {t("dashboard.title")}
-        </h1>
-      </div>
+    <header
+      className="flex items-center justify-between px-6 py-3 flex-shrink-0"
+      style={{
+        background: "var(--surface)",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
+      {/* Page title */}
+      <h1 className="page-title">{pageTitle}</h1>
 
-      <div className="flex items-center gap-4">
-        {/* Role Badge */}
-        <span
-          className={`${getRoleBadgeColor()} rounded-full px-3 py-1 text-xs font-medium`}
-        >
-          {t("dashboard.role")}: {databaseUser?.role?.description || t("sidebar.collaborator")}
-        </span>
-
-        {/* Notification Bell with Badge */}
-        <div className="relative notifications-dropdown">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-stone-300 hover:text-orange-300 transition rounded-lg hover:bg-orange-50/10"
+      <div className="flex items-center gap-3">
+        {/* Role badge */}
+        {roleLabel && (
+          <span
+            className="badge badge-orange hidden sm:inline-flex"
           >
-            <Bell size={20} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                {unreadCount}
+            {roleLabel}
+          </span>
+        )}
+
+        {/* Notifications */}
+        <div className="relative" ref={panelRef}>
+          <button
+            onClick={() => setNotificationsOpen((v) => !v)}
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl transition"
+            style={{ color: "var(--text-3)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "var(--surface-raised)";
+              (e.currentTarget as HTMLElement).style.color = "var(--text-1)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+              (e.currentTarget as HTMLElement).style.color = "var(--text-3)";
+            }}
+          >
+            <Bell size={18} />
+            {unread > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                style={{ background: "var(--danger)" }}
+              >
+                {unread}
               </span>
             )}
           </button>
 
-          {/* Notifications Dropdown */}
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white/90 rounded-xl shadow-lg border border-orange-100/20 z-50 backdrop-blur-md">
-              <div className="p-3 border-b border-orange-100/20 flex justify-between items-center">
-                <h3 className="font-semibold text-orange-300">Notifications</h3>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="text-xs text-orange-300 hover:text-orange-200"
-                  >
-                    {t("dashboard.markAllRead")}
-                  </button>
-                )}
-              </div>
-
-              <div className="max-h-96 overflow-y-auto">
-                {notifications.length > 0 ? (
-                  notifications.map((notif) => (
-                    <div
-                      key={notif.id}
-                      onClick={() => markAsRead(notif.id)}
-                      className={`p-3 border-b border-orange-50/10 hover:bg-orange-50/10 cursor-pointer transition ${
-                        !notif.read ? "bg-orange-50/5" : ""
-                      }`}
+          {notificationsOpen && (
+            <div
+              className="absolute right-0 mt-2 w-80 rounded-2xl overflow-hidden z-50"
+              style={{
+                background: "var(--surface-overlay)",
+                border: "1px solid var(--border-strong)",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+              }}
+            >
+              <div
+                className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid var(--border)" }}
+              >
+                <span className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
+                  Notifications
+                </span>
+                <div className="flex items-center gap-3">
+                  {unread > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-xs"
+                      style={{ color: "var(--accent)" }}
                     >
-                      <div className="flex gap-3">
-                        <div className="text-xl">
-                          {getNotificationIcon(notif.type)}
-                        </div>
-                        <div className="flex-1">
-                          <p
-                            className={`text-sm ${!notif.read ? "font-medium text-white" : "text-stone-300"}`}
-                          >
-                            {notif.message}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs text-stone-400">
-                              {notif.time}
-                            </p>
-                            {!notif.read && (
-                                  <span className="text-xs text-orange-300 font-medium">
-                                {t("dashboard.new")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {!notif.read && (
-                          <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-8 text-center">
-                    <div className="text-4xl mb-2">🔔</div>
-                    <p className="text-stone-300">{t("dashboard.noNotifications")}</p>
-                    <p className="text-xs text-stone-400 mt-1">
-                      {t("dashboard.allCaughtUp")}
-                    </p>
-                  </div>
-                )}
+                      Tout lire
+                    </button>
+                  )}
+                  <button onClick={() => setNotificationsOpen(false)} style={{ color: "var(--text-3)" }}>
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
 
-              <div className="p-2 border-t border-orange-100/20">
-                <Link
-                  href="/notifications"
-                  className="block text-center text-sm text-orange-300 hover:text-orange-200 py-1"
-                  onClick={() => setShowNotifications(false)}
-                >
-                  {t("dashboard.viewAllNotifications")}
-                </Link>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => markAsRead(n.id)}
+                    className="flex items-start gap-3 px-4 py-3 cursor-pointer transition"
+                    style={{
+                      background: !n.read ? "rgba(249,115,22,0.04)" : "transparent",
+                      borderBottom: "1px solid var(--border)",
+                    }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--surface-raised)")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = !n.read ? "rgba(249,115,22,0.04)" : "transparent")}
+                  >
+                    <div
+                      className="mt-0.5 h-2 w-2 rounded-full flex-shrink-0"
+                      style={{ background: !n.read ? "var(--accent)" : "transparent" }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-xs leading-snug"
+                        style={{ color: !n.read ? "var(--text-1)" : "var(--text-2)", fontWeight: !n.read ? 500 : 400 }}
+                      >
+                        {n.message}
+                      </p>
+                      <p className="text-[11px] mt-1" style={{ color: "var(--text-3)" }}>
+                        {n.time}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* User Info */}
-        <div className="flex items-center gap-3">
-          {/* Avatar - shows image if exists, otherwise initials */}
+        {/* User */}
+        <div className="flex items-center gap-2.5">
           {databaseUser?.avatarUrl ? (
-            <div className="relative">
-              <Image
-                src={databaseUser.avatarUrl}
-                alt={getDisplayName()}
-                width={36}
-                height={36}
-                className="rounded-full object-cover w-9 h-9 border-2 border-orange-200"
-              />
-            </div>
+            <Image
+              src={databaseUser.avatarUrl}
+              alt={displayName}
+              width={32}
+              height={32}
+              className="rounded-full object-cover w-8 h-8"
+              style={{ border: "2px solid var(--border-strong)" }}
+            />
           ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-sm font-semibold text-white">
-              {avatarInitials}
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold flex-shrink-0"
+              style={{ background: "var(--accent)", color: "#fff" }}
+            >
+              {initials}
             </div>
           )}
-
-          <div className="text-sm">
-            <p className="font-semibold text-white">{getDisplayName()}</p>
-            <p className="text-stone-300">{getUserTitle()}</p>
+          <div className="hidden sm:block">
+            <p className="text-xs font-semibold" style={{ color: "var(--text-1)" }}>
+              {displayName}
+            </p>
+            <p className="text-[11px]" style={{ color: "var(--text-3)" }}>
+              {databaseUser?.jobTitle ?? roleLabel}
+            </p>
           </div>
         </div>
 
-        {/* Logout Button */}
+        {/* Logout */}
         <button
           onClick={logout}
-          className="ml-1 rounded-lg p-2 text-stone-300 transition-colors hover:bg-orange-50/10 hover:text-orange-300"
-          title="Logout"
+          title="Déconnexion"
+          className="flex h-9 w-9 items-center justify-center rounded-xl transition"
+          style={{ color: "var(--text-3)" }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.1)";
+            (e.currentTarget as HTMLElement).style.color = "#f87171";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "transparent";
+            (e.currentTarget as HTMLElement).style.color = "var(--text-3)";
+          }}
         >
-          <LogOut size={20} />
+          <LogOut size={17} />
         </button>
       </div>
-    </div>
+    </header>
   );
 }
-

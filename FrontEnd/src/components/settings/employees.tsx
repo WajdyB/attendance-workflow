@@ -317,7 +317,7 @@ export default function EmployeesSettings() {
         <button
           type="button"
           onClick={() => void fetchAll()}
-          className="mt-4 rounded-lg border border-orange-200 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+          className="mt-4 rounded-lg border border-orange-200 hover:border-orange-300 px-3 py-2 text-sm text-orange-700 hover:text-orange-600 hover:bg-orange-50/50 transition-all cursor-pointer"
         >
           {labels.refresh}
         </button>
@@ -413,7 +413,7 @@ export default function EmployeesSettings() {
             <button
               type="submit"
               disabled={isSubmittingCreate}
-              className="mt-5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-5 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 disabled:opacity-60 px-4 py-2 text-sm font-medium text-white transition-all cursor-pointer disabled:cursor-not-allowed"
             >
               {isSubmittingCreate ? labels.loading : labels.submitCreate}
             </button>
@@ -477,7 +477,7 @@ export default function EmployeesSettings() {
             <button
               type="submit"
               disabled={!selectedUserId || isSubmittingEdit}
-              className="mt-5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-5 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 disabled:opacity-60 px-4 py-2 text-sm font-medium text-white transition-all cursor-pointer disabled:cursor-not-allowed"
             >
               {isSubmittingEdit ? labels.loading : labels.submitUpdate}
             </button>

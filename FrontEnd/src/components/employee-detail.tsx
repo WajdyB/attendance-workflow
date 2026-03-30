@@ -720,7 +720,7 @@ export default function EmployeeDetail({
         </div>
         <button
           onClick={() => router.back()}
-          className="p-2 text-stone-400 hover:text-white hover:bg-stone-700/30 rounded-lg transition-all"
+          className="p-2 text-stone-400 hover:text-white hover:bg-stone-700/30 rounded-lg transition-all cursor-pointer"
           title={labels.cancel}
         >
           <X size={24} />
@@ -772,7 +772,7 @@ export default function EmployeeDetail({
             <button
               type="button"
               onClick={() => void handleRemovePicture()}
-              className="flex items-center gap-2 px-3 py-2 bg-red-900/20 hover:bg-red-900/30 border border-red-700/50 text-red-300 rounded-lg transition-all text-sm"
+              className="flex items-center gap-2 px-3 py-2 bg-red-900/20 hover:bg-red-900/40 border border-red-700/50 hover:border-red-600 text-red-300 hover:text-red-200 rounded-lg transition-all text-sm font-medium"
             >
               <Trash2 size={16} />
               {labels.removePicture}
@@ -789,7 +789,7 @@ export default function EmployeeDetail({
               <button
                 type="button"
                 onClick={addPendingDocument}
-                className="rounded-lg border border-orange-400/35 bg-orange-500/15 px-3 py-2 text-sm font-medium text-orange-300 transition hover:bg-orange-500/25"
+                className="rounded-lg border border-orange-400/35 hover:border-orange-400/60 bg-orange-500/15 hover:bg-orange-500/35 px-3 py-2 text-sm font-medium text-orange-300 hover:text-orange-200 transition-all"
               >
                 {labels.addDocument}
               </button>
@@ -812,7 +812,7 @@ export default function EmployeeDetail({
                       <button
                         type="button"
                         onClick={() => removePendingDocument(document.id)}
-                        className="rounded-lg border border-red-500/40 bg-red-900/25 px-3 py-1 text-xs text-red-200 transition hover:bg-red-900/40"
+                        className="rounded-lg border border-red-500/40 hover:border-red-500/60 bg-red-900/25 hover:bg-red-900/40 px-3 py-1 text-xs text-red-200 hover:text-red-100 transition-all font-medium"
                       >
                         {labels.removeDocument}
                       </button>
@@ -1007,7 +1007,7 @@ export default function EmployeeDetail({
                           <button
                             type="button"
                             onClick={() => setPreviewDocument(document)}
-                            className="rounded-lg border border-stone-500/35 bg-stone-700/20 px-3 py-2 text-xs font-medium text-stone-200 transition hover:bg-stone-700/35"
+                            className="rounded-lg border border-stone-500/35 hover:border-stone-500/60 bg-stone-700/20 hover:bg-stone-700/40 px-3 py-2 text-xs font-medium text-stone-200 hover:text-stone-100 transition-all"
                           >
                             {labels.previewDocument}
                           </button>
@@ -1026,7 +1026,7 @@ export default function EmployeeDetail({
                           <button
                             type="button"
                             onClick={() => setPendingDeleteDocument(document)}
-                            className="rounded-lg border border-red-500/40 bg-red-900/25 px-3 py-2 text-xs font-medium text-red-200 transition hover:bg-red-900/40"
+                            className="rounded-lg border border-red-500/40 hover:border-red-500/60 bg-red-900/25 hover:bg-red-900/40 px-3 py-2 text-xs font-medium text-red-200 hover:text-red-100 transition-all"
                           >
                             {labels.deleteDocument}
                           </button>
@@ -1071,7 +1071,7 @@ export default function EmployeeDetail({
                 <button
                   type="button"
                   onClick={() => setPreviewDocument(null)}
-                  className="rounded-md border border-stone-600/40 px-2 py-1 text-xs text-stone-300 hover:bg-stone-700/40"
+                  className="rounded-md border border-stone-600/40 hover:border-stone-600/60 px-2 py-1 text-xs text-stone-300 hover:text-stone-200 hover:bg-stone-700/40 transition-all"
                 >
                   {labels.cancel}
                 </button>
@@ -1319,7 +1319,7 @@ export default function EmployeeDetail({
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg transition-all font-medium"
+              className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-400 disabled:opacity-60 text-white rounded-lg transition-all font-medium cursor-pointer"
             >
               <Save size={18} />
               {labels.save}
@@ -1327,7 +1327,7 @@ export default function EmployeeDetail({
             <button
               type="button"
               onClick={() => router.back()}
-              className="px-6 py-3 bg-stone-700/30 hover:bg-stone-700/50 text-stone-300 rounded-lg transition-all font-medium border border-stone-600/50"
+              className="px-6 py-3 bg-stone-700/30 hover:bg-stone-700/50 text-stone-300 hover:text-stone-200 rounded-lg transition-all font-medium border border-stone-600/50 hover:border-stone-600/70 cursor-pointer"
             >
               {labels.cancel}
             </button>

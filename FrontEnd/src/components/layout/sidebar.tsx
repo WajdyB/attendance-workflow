@@ -1,139 +1,169 @@
-// components/Sidebar.tsx
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useAuth } from "@/context/AuthContext";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import {
+  LayoutDashboard,
+  Users,
+  FolderKanban,
+  Clock,
+  Building2,
+  FileText,
+  Star,
+  User,
+  CheckSquare,
+  type LucideIcon,
+} from "lucide-react";
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+}
 
 export default function Sidebar() {
   const { databaseUser, isAuthenticated } = useAuth();
   const { t } = useLanguage();
   const pathname = usePathname();
 
-  // Get user role from databaseUser (keep original case for display)
-  const userRole = databaseUser?.role?.description || "";
-  const normalizedRole = userRole.trim().toLowerCase();
+  if (pathname === "/auth/login" || !isAuthenticated) return null;
 
-  // Don't show sidebar on login page
-  if (pathname === "/auth/login") return null;
+  const role = databaseUser?.role?.description?.toLowerCase() ?? "";
+  const isAdmin = role.includes("admin");
+  const isManager = role.includes("manager");
+  const isCollaborator = role.includes("collaborat");
 
-  // Define menu items based on role
-  const getMenuItems = () => {
-    // Base items for all authenticated users
-    const baseItems = [{ name: t("sidebar.dashboard"), href: "/dashboard", icon: "📊" }];
+  const getNavItems = (): NavItem[] => {
+    const base: NavItem[] = [
+      { label: t("sidebar.dashboard"), href: "/dashboard", icon: LayoutDashboard },
+    ];
 
-    // Admin items
-    if (normalizedRole.includes("admin")) {
-      // Match exactly what's in DB
+    if (isAdmin) {
       return [
-        ...baseItems,
-        { name: t("sidebar.employees"), href: "/employees", icon: "👥" },
-        { name: t("sidebar.projects"), href: "/projects", icon: "📁" },
-        { name: t("sidebar.timesheets"), href: "/timesheets", icon: "⏱️" },
-        { name: t("sidebar.rolesDepots"), href: "/roles-depots", icon: "🏢" },
-        { name: t("sidebar.requests"), href: "/requests", icon: "📋" },
-        { name: t("sidebar.settings"), href: "/profile", icon: "⚙️" },
+        ...base,
+        { label: t("sidebar.employees"),   href: "/employees",   icon: Users },
+        { label: t("sidebar.projects"),     href: "/projects",    icon: FolderKanban },
+        { label: t("sidebar.timesheets"),   href: "/timesheets",  icon: Clock },
+        { label: t("sidebar.rolesDepots"),  href: "/roles-depots",icon: Building2 },
+        { label: t("sidebar.requests"),     href: "/requests",    icon: FileText },
+        { label: t("sidebar.performance"),  href: "/performance", icon: Star },
+        { label: t("sidebar.myDossier"),    href: "/profile",     icon: User },
       ];
     }
 
-    // Collaborator items
-    if (normalizedRole.includes("collaborateur") || normalizedRole.includes("collaborator")) {
-      // Match exactly what's in DB
+    if (isManager) {
       return [
-        ...baseItems,
-        { name: t("sidebar.timesheets"), href: "/timesheets", icon: "⏱️" },
-        { name: t("sidebar.projects"), href: "/projects", icon: "📁" },
-        { name: t("sidebar.requests"), href: "/requests", icon: "📨" },
-        { name: t("sidebar.settings"), href: "/profile", icon: "⚙️" },
-        { name: t("sidebar.myDossier"), href: "/dossier", icon: "📄" },
+        ...base,
+        { label: t("sidebar.approvals"),    href: "/approvals",   icon: CheckSquare },
+        { label: t("sidebar.timesheets"),   href: "/timesheets",  icon: Clock },
+        { label: t("sidebar.projects"),     href: "/projects",    icon: FolderKanban },
+        { label: t("sidebar.requests"),     href: "/requests",    icon: FileText },
+        { label: t("sidebar.performance"),  href: "/performance", icon: Star },
+        { label: t("sidebar.myDossier"),    href: "/profile",     icon: User },
       ];
     }
 
-    // Manager items
-    if (normalizedRole.includes("manager")) {
-      // Match exactly what's in DB
+    if (isCollaborator) {
       return [
-        ...baseItems,
-        { name: t("sidebar.approvals"), href: "/approvals", icon: "✅" },
-        { name: t("sidebar.timesheets"), href: "/timesheets", icon: "⏱️" },
-        { name: t("sidebar.projects"), href: "/projects", icon: "📁" },
-        { name: t("sidebar.settings"), href: "/profile", icon: "⚙️" },
-        { name: t("sidebar.myDossier"), href: "/dossier", icon: "📄" },
-        { name: t("sidebar.evaluations"), href: "/evaluations", icon: "⭐" },
+        ...base,
+        { label: t("sidebar.timesheets"),   href: "/timesheets",  icon: Clock },
+        { label: t("sidebar.projects"),     href: "/projects",    icon: FolderKanban },
+        { label: t("sidebar.requests"),     href: "/requests",    icon: FileText },
+        { label: t("sidebar.performance"),  href: "/performance", icon: Star },
+        { label: t("sidebar.myDossier"),    href: "/profile",     icon: User },
       ];
     }
 
-    // Default items (if role not recognized)
-    return baseItems;
+    return base;
   };
 
-  const menuItems = getMenuItems();
-
-  // If not authenticated, don't show sidebar
-  if (!isAuthenticated) return null;
-
-  // Get user display name
+  const navItems = getNavItems();
   const displayName = databaseUser
     ? `${databaseUser.firstName} ${databaseUser.lastName}`
-    : t("sidebar.user");
-
-  // Get user role display (for UI)
-  const roleDisplay =
-    normalizedRole.includes("admin")
-      ? t("sidebar.administrator")
-      : normalizedRole.includes("manager")
-        ? t("sidebar.manager")
-        : normalizedRole.includes("collaborateur") || normalizedRole.includes("collaborator")
-          ? t("sidebar.collaborator")
-          : t("sidebar.user");
+    : "";
+  const roleLabel = databaseUser?.role?.description ?? "";
 
   return (
-    <aside className="w-72 border-r border-orange-100/20 bg-white/70 p-5 flex flex-col h-screen backdrop-blur-md">
-      {/* Logo and Title */}
-      <div className="mb-8 flex items-center gap-3">
-        <Image
-          src="/logos/mafrah.png"
-          alt="RHpro Logo"
-          width={40}
-          height={40}
-          className="h-10 w-10 object-contain"
-        />
-        <h2 className="text-lg font-semibold text-orange-400">RHpro</h2>
+    <aside
+      style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}
+      className="w-64 flex flex-col h-screen flex-shrink-0"
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-5 py-5 border-b"
+           style={{ borderColor: "var(--border)" }}>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg"
+             style={{ background: "var(--accent-dim)" }}>
+          <Image src="/logos/logo.svg" alt="RHpro" width={18} height={18} />
+        </div>
+        <span className="text-base font-semibold" style={{ color: "var(--text-1)" }}>
+          RHpro
+        </span>
       </div>
 
-      {/* User Info */}
-      <div className="mb-4 rounded-xl border border-orange-200/20 bg-orange-50/10 px-3 py-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-orange-400">
-          {roleDisplay}
-        </p>
-        <p className="mt-0.5 text-xs text-stone-300">{displayName}</p>
-      </div>
-
-      {/* Navigation Menu */}
-      <nav className="space-y-2 flex-1">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.href;
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+        {navItems.map(({ label, href, icon: Icon }) => {
+          const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
           return (
             <Link
-              key={item.name}
-              href={item.href}
-              className={`block rounded-lg px-3 py-2.5 text-sm transition ${
+              key={href}
+              href={href}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all"
+              style={
                 isActive
-                  ? "border border-orange-300/30 bg-orange-100/20 font-medium text-orange-300"
-                  : "text-stone-300 hover:bg-orange-50/10 hover:text-orange-200"
-              }`}
+                  ? {
+                      background: "var(--accent-dim)",
+                      color: "var(--accent)",
+                    }
+                  : {
+                      color: "var(--text-3)",
+                    }
+              }
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLElement).style.background = "var(--surface-raised)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--text-1)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "var(--text-3)";
+                }
+              }}
             >
-              <span className="flex items-center gap-2">
-                <span>{item.icon}</span>
-                {item.name}
-              </span>
+              <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} />
+              {label}
             </Link>
           );
         })}
       </nav>
+
+      {/* User card */}
+      <div className="px-3 pb-4">
+        <div
+          className="flex items-center gap-3 rounded-xl p-3"
+          style={{ background: "var(--surface-raised)" }}
+        >
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold flex-shrink-0"
+            style={{ background: "var(--accent)", color: "#fff" }}
+          >
+            {databaseUser?.firstName?.[0]}{databaseUser?.lastName?.[0]}
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-xs font-medium truncate" style={{ color: "var(--text-1)" }}>
+              {displayName}
+            </p>
+            <p className="text-[11px] truncate" style={{ color: "var(--text-3)" }}>
+              {roleLabel}
+            </p>
+          </div>
+        </div>
+      </div>
     </aside>
   );
 }
-

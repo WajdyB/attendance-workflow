@@ -56,6 +56,72 @@ export const apiConfig = {
       byId: (id: string, userId: string) => `${API_URL}/documents/getdocumentbyid/${id}/${userId}`,
       delete: (id: string, userId: string) => `${API_URL}/documents/deletedocument/${id}/${userId}`,
     },
+    evaluations: {
+      all: (params?: { collaboratorId?: string; managerId?: string; type?: string; year?: number }) => {
+        const url = new URL(`${API_URL}/evaluations`);
+        if (params?.collaboratorId) url.searchParams.set('collaboratorId', params.collaboratorId);
+        if (params?.managerId) url.searchParams.set('managerId', params.managerId);
+        if (params?.type) url.searchParams.set('type', params.type);
+        if (params?.year) url.searchParams.set('year', String(params.year));
+        return url.toString();
+      },
+      byId: (id: string) => `${API_URL}/evaluations/${id}`,
+      byCollaborator: (id: string) => `${API_URL}/evaluations/collaborator/${id}`,
+      trend: (id: string) => `${API_URL}/evaluations/collaborator/${id}/trend`,
+      create: `${API_URL}/evaluations`,
+      update: (id: string) => `${API_URL}/evaluations/${id}`,
+      delete: (id: string) => `${API_URL}/evaluations/${id}`,
+      departmentStats: (year?: number) => year ? `${API_URL}/evaluations/reports/departments?year=${year}` : `${API_URL}/evaluations/reports/departments`,
+      performanceVsSalary: (departmentId?: string) => departmentId ? `${API_URL}/evaluations/reports/performance-vs-salary?departmentId=${departmentId}` : `${API_URL}/evaluations/reports/performance-vs-salary`,
+      salaryAll: (departmentId?: string) => departmentId ? `${API_URL}/evaluations/salary/all?departmentId=${departmentId}` : `${API_URL}/evaluations/salary/all`,
+      salaryByUser: (userId: string) => `${API_URL}/evaluations/salary/user/${userId}`,
+    },
+    projects: {
+      all: (status?: string) => status ? `${API_URL}/projects?status=${status}` : `${API_URL}/projects`,
+      byId: (id: string) => `${API_URL}/projects/${id}`,
+      byUser: (userId: string) => `${API_URL}/projects/user/${userId}`,
+      create: `${API_URL}/projects`,
+      update: (id: string) => `${API_URL}/projects/${id}`,
+      delete: (id: string) => `${API_URL}/projects/${id}`,
+      team: (id: string) => `${API_URL}/projects/${id}/team`,
+      assignMember: (id: string) => `${API_URL}/projects/${id}/team`,
+      removeMember: (id: string, collaboratorId: string) => `${API_URL}/projects/${id}/team/${collaboratorId}`,
+      hours: (id: string, year?: number, month?: number) => {
+        let url = `${API_URL}/projects/${id}/hours`;
+        const params = [];
+        if (year) params.push(`year=${year}`);
+        if (month) params.push(`month=${month}`);
+        return params.length ? `${url}?${params.join('&')}` : url;
+      },
+      overviewReport: (year: number, month?: number) =>
+        month ? `${API_URL}/projects/reports/overview?year=${year}&month=${month}` : `${API_URL}/projects/reports/overview?year=${year}`,
+      resourceAllocation: (year: number, month: number) =>
+        `${API_URL}/projects/reports/resources?year=${year}&month=${month}`,
+    },
+    requests: {
+      create: `${API_URL}/requests`,
+      update: (id: string) => `${API_URL}/requests/${id}`,
+      submit: (id: string) => `${API_URL}/requests/${id}/submit`,
+      approve: (id: string) => `${API_URL}/requests/${id}/approve`,
+      reject: (id: string) => `${API_URL}/requests/${id}/reject`,
+      cancel: (id: string, userId: string) => `${API_URL}/requests/${id}/cancel?userId=${userId}`,
+      byUser: (userId: string) => `${API_URL}/requests/user/${userId}`,
+      pendingForManager: (managerId: string) => `${API_URL}/requests/manager/${managerId}/pending`,
+      allForAdmin: `${API_URL}/requests/admin/all`,
+      calendar: (month: number, year: number) => `${API_URL}/requests/calendar?month=${month}&year=${year}`,
+      balance: (userId: string, year: number) => `${API_URL}/requests/balance/${userId}?year=${year}`,
+      updateBalance: (userId: string) => `${API_URL}/requests/balance/${userId}`,
+      allBalances: (year: number) => `${API_URL}/requests/balance?year=${year}`,
+      stats: (year: number) => `${API_URL}/requests/stats?year=${year}`,
+      notifications: (userId: string) => `${API_URL}/requests/notifications/${userId}`,
+      markSeen: (id: string) => `${API_URL}/requests/notifications/${id}/seen`,
+    },
+    holidays: {
+      all: (year?: number) => year ? `${API_URL}/holidays?year=${year}` : `${API_URL}/holidays`,
+      create: `${API_URL}/holidays`,
+      update: (id: string) => `${API_URL}/holidays/${id}`,
+      delete: (id: string) => `${API_URL}/holidays/${id}`,
+    },
     timesheets: {
       projects: `${API_URL}/timesheets/projects`,
       saveDraft: `${API_URL}/timesheets/draft`,

@@ -8,6 +8,8 @@ type StorageMode = 'local' | 'session';
 interface FetchOptions extends RequestInit {
   skipInterceptor?: boolean;
   retryAlternateLocalhost?: boolean;
+  /** Suppress console.error for expected 404s / optional endpoints */
+  silent?: boolean;
 }
 
 class ApiClient {
@@ -18,6 +20,7 @@ class ApiClient {
     const {
       skipInterceptor = false,
       retryAlternateLocalhost = true,
+      silent = false,
       ...fetchOptions
     } = options;
 
@@ -36,20 +39,25 @@ class ApiClient {
         },
       });
 
-      // Handle 401 - try to refresh token
+      // Handle 401 - try to refresh token, then force logout if still failing
       if (response.status === 401 && !skipInterceptor) {
         const refreshToken = this.getRefreshToken();
         if (refreshToken) {
           const refreshed = await this.refreshAccessToken(refreshToken);
           if (refreshed) {
-            // Retry the original request with new token
-            return this.request<T>(url, { ...options, skipInterceptor: true });
-          } else {
-            // Refresh failed, redirect to login
-            this.logout();
-            throw new Error('Session expired. Please login again.');
+            try {
+              // Retry once with the new token
+              return await this.request<T>(url, { ...options, skipInterceptor: true });
+            } catch {
+              // Retry also failed (e.g. user no longer exists in DB) — force logout
+              this.logout();
+              throw new Error('Session expired. Please login again.');
+            }
           }
         }
+        // No refresh token or refresh failed — force logout
+        this.logout();
+        throw new Error('Session expired. Please login again.');
       }
 
       if (!response.ok) {
@@ -57,9 +65,18 @@ class ApiClient {
         const errorData = contentType.includes('application/json')
           ? await response.json().catch(() => ({}))
           : {};
-        throw new Error(
-          errorData.message || `API Error: ${response.statusText}`,
-        );
+        const message: string = errorData.message || `API Error: ${response.statusText}`;
+
+        // User's DB record is gone despite a valid token — clear session immediately
+        if (
+          response.status === 401 ||
+          message === 'User not found in database'
+        ) {
+          this.logout();
+          throw new Error('Session expired. Please login again.');
+        }
+
+        throw new Error(message);
       }
 
       const contentType = response.headers.get('content-type') || '';
@@ -85,7 +102,7 @@ class ApiClient {
         }
       }
 
-      console.error('API request failed:', error);
+      if (!silent) console.error('API request failed:', error);
       throw error;
     }
   }

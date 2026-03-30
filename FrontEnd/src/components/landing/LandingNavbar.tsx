@@ -7,16 +7,14 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "../layout/language-switcher";
 
-const links = [
-  { href: "#features", label: "Features" },
-  { href: "#workflow", label: "Workflow" },
-  { href: "#security", label: "Security" },
-  { href: "#ai-roadmap", label: "AI Roadmap" },
-  { href: "#contact", label: "Contact" },
-];
-
 export default function LandingNavbar() {
   const { t } = useLanguage();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   const links = [
     { href: "#features", label: t("landing.features") },
     { href: "#workflow", label: t("landing.workflow") },
@@ -88,7 +86,7 @@ export default function LandingNavbar() {
 
         <button
           aria-label="Open navigation menu"
-          className="rounded-lg border border-orange-200 p-2 text-stone-600 md:hidden"
+          className="rounded-lg border border-orange-200 hover:border-orange-300 hover:bg-orange-100/30 p-2 text-stone-600 hover:text-orange-700 md:hidden transition-all cursor-pointer"
           onClick={() => setMobileOpen((prev) => !prev)}
           type="button"
         >

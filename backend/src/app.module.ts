@@ -14,6 +14,10 @@ import { DepartmentsModule } from './departments/departments.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { TimesheetsModule } from './modules/timesheets/timesheets.module';
+import { RequestsModule } from './modules/requests/requests.module';
+import { HolidaysModule } from './modules/holidays/holidays.module';
+import { ProjectsModule } from './modules/projects/projects.module';
+import { EvaluationsModule } from './modules/evaluations/evaluations.module';
 
 @Module({
   imports: [
@@ -30,6 +34,10 @@ import { TimesheetsModule } from './modules/timesheets/timesheets.module';
     DocumentsModule,
     ContractsModule,
     TimesheetsModule,
+    RequestsModule,
+    HolidaysModule,
+    ProjectsModule,
+    EvaluationsModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseProvider],

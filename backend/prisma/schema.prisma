@@ -43,6 +43,7 @@ enum RequestStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 
   @@map("request_status")
   @@schema("public")
@@ -54,6 +55,41 @@ enum RequestType {
   OTHER
 
   @@map("request_type")
+  @@schema("public")
+}
+
+enum EvaluationType {
+  ANNUAL
+  SEMIANNUAL
+  PROJECT
+  THREE_SIXTY
+
+  @@map("evaluation_type")
+  @@schema("public")
+}
+
+enum SalaryIncreaseReason {
+  PROMOTION
+  PERFORMANCE
+  INFLATION
+  ANNUAL_REVIEW
+  OTHER
+
+  @@map("salary_increase_reason")
+  @@schema("public")
+}
+
+enum LeaveType {
+  PTO
+  SICK
+  MATERNITY
+  PATERNITY
+  UNPAID
+  TRAINING
+  FAMILY_EVENT
+  OTHER
+
+  @@map("leave_type")
   @@schema("public")
 }
 
@@ -160,6 +196,7 @@ model User {
   documents         Document[]      @relation("DocumentOwner")
   uploadedDocuments Document[]      @relation("DocumentUploadedBy")
   notifications     Notification[]
+  ledProjects       Project[]       @relation("ProjectLead")
 
   @@map("users")
   @@schema("public")
@@ -221,18 +258,20 @@ model Contract {
 }
 
 model SalaryHistory {
-  id              String         @id @default(uuid()) @db.Uuid
-  userId          String         @map("user_id") @db.Uuid
-  validatedBy     String?        @map("validated_by") @db.Uuid
-  oldSalary       Decimal        @map("old_salary") @db.Decimal(12, 2)
-  newSalary       Decimal        @map("new_salary") @db.Decimal(12, 2)
-  changeDate      DateTime       @map("change_date") @db.Date
-  status          ApprovalStatus @default(VALIDATED)
-  decisionComment String?        @map("decision_comment")
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  manager         Manager?       @relation(fields: [validatedBy], references: [id], onDelete: SetNull)
+  id              String                @id @default(uuid()) @db.Uuid
+  userId          String                @map("user_id") @db.Uuid
+  validatedBy     String?               @map("validated_by") @db.Uuid
+  oldSalary       Decimal               @map("old_salary") @db.Decimal(12, 2)
+  newSalary       Decimal               @map("new_salary") @db.Decimal(12, 2)
+  changeDate      DateTime              @map("change_date") @db.Date
+  reason          SalaryIncreaseReason? @map("reason")
+  status          ApprovalStatus        @default(VALIDATED)
+  decisionComment String?               @map("decision_comment")
+  attachmentUrl   String?               @map("attachment_url")
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  manager         Manager?              @relation(fields: [validatedBy], references: [id], onDelete: SetNull)
 
   @@map("salary_history")
   @@schema("public")
@@ -304,11 +343,17 @@ model Project {
   id               String              @id @default(uuid()) @db.Uuid
   code             String?             @unique
   name             String?
+  description      String?
+  client           String?
   status           ProjectStatus       @default(IN_PROGRESS)
   startDate        DateTime?           @map("start_date") @db.Date
   endDate          DateTime?           @map("end_date") @db.Date
+  budgetHours      Decimal?            @map("budget_hours") @db.Decimal(10, 2)
+  budgetAmount     Decimal?            @map("budget_amount") @db.Decimal(12, 2)
+  leadId           String?             @map("lead_id") @db.Uuid
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lead             User?               @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
   assignments      ProjectAssignment[]
   timesheetEntries TimesheetEntry[]
 
@@ -333,38 +378,59 @@ model ProjectAssignment {
 }
 
 model Request {
-  id              String        @id @default(uuid()) @db.Uuid
-  submittedBy     String        @map("submitted_by") @db.Uuid
-  decidedBy       String?       @map("decided_by") @db.Uuid
-  requestType     RequestType   @map("request_type")
-  status          RequestStatus @default(DRAFT)
-  comment         String?
-  decisionComment String?       @map("decision_comment")
-  leavePaid       Boolean?      @map("leave_paid")
-  leaveStartDate  DateTime?     @map("leave_start_date") @db.Date
-  leaveEndDate    DateTime?     @map("leave_end_date") @db.Date
-  proposedSalary  Decimal?      @map("proposed_salary") @db.Decimal(12, 2)
-  effectiveDate   DateTime?     @map("effective_date") @db.Date
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-  submitter       User          @relation("RequestSubmittedBy", fields: [submittedBy], references: [id], onDelete: Cascade)
-  manager         Manager?      @relation("RequestDecidedBy", fields: [decidedBy], references: [id], onDelete: SetNull)
+  id               String        @id @default(uuid()) @db.Uuid
+  submittedBy      String        @map("submitted_by") @db.Uuid
+  decidedBy        String?       @map("decided_by") @db.Uuid
+  requestType      RequestType   @map("request_type")
+  status           RequestStatus @default(DRAFT)
+  comment          String?
+  decisionComment  String?       @map("decision_comment")
+  leaveType        LeaveType?    @map("leave_type")
+  leavePaid        Boolean?      @map("leave_paid")
+  leaveStartDate   DateTime?     @map("leave_start_date") @db.Date
+  leaveEndDate     DateTime?     @map("leave_end_date") @db.Date
+  workingDaysCount Int?          @map("working_days_count")
+  attachmentUrl    String?       @map("attachment_url")
+  proposedSalary   Decimal?      @map("proposed_salary") @db.Decimal(12, 2)
+  effectiveDate    DateTime?     @map("effective_date") @db.Date
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  submitter        User          @relation("RequestSubmittedBy", fields: [submittedBy], references: [id], onDelete: Cascade)
+  manager          Manager?      @relation("RequestDecidedBy", fields: [decidedBy], references: [id], onDelete: SetNull)
 
   @@map("requests")
   @@schema("public")
 }
 
+model PublicHoliday {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  date      DateTime @db.Date
+  year      Int?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("public_holidays")
+  @@schema("public")
+}
+
 model Evaluation {
-  id             String       @id @default(uuid()) @db.Uuid
-  managerId      String       @map("manager_id") @db.Uuid
-  collaboratorId String       @map("collaborator_id") @db.Uuid
-  reviewDate     DateTime?    @map("review_date") @db.Date
-  globalScore    Decimal?     @map("global_score") @db.Decimal(5, 2)
+  id             String         @id @default(uuid()) @db.Uuid
+  managerId      String         @map("manager_id") @db.Uuid
+  collaboratorId String         @map("collaborator_id") @db.Uuid
+  evaluationType EvaluationType @default(ANNUAL) @map("evaluation_type")
+  period         String?
+  reviewDate     DateTime?      @map("review_date") @db.Date
+  globalScore    Decimal?       @map("global_score") @db.Decimal(5, 2)
+  technicalScore Decimal?       @map("technical_score") @db.Decimal(5, 2)
+  softSkillScore Decimal?       @map("soft_skill_score") @db.Decimal(5, 2)
   comments       String?
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  manager        Manager      @relation(fields: [managerId], references: [id], onDelete: Cascade)
-  collaborator   Collaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+  objectives     String?
+  documentUrl    String?        @map("document_url")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  manager        Manager        @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  collaborator   Collaborator   @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
 
   @@map("evaluations")
   @@schema("public")

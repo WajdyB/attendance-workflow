@@ -25,6 +25,7 @@ const translations: Record<Language, Record<string, string>> = {
     "auth.login.remember": "Rester connecté",
     "auth.login.submit": "Se connecter",
     "auth.login.loading": "Connexion en cours...",
+    "auth.login.backHome": "Retour à l'accueil",
     "auth.login.fillAll": "Veuillez remplir tous les champs",
     "auth.login.network": "Erreur réseau. Vérifiez votre connexion.",
     "auth.login.invalidResponse": "Le point de connexion a renvoyé une réponse non JSON. Vérifiez NEXT_PUBLIC_API_URL (actuel : {baseUrl}).",
@@ -115,6 +116,7 @@ const translations: Record<Language, Record<string, string>> = {
     "sidebar.dashboard": "Tableau de bord",
     "sidebar.employees": "Employés",
     "sidebar.projects": "Projets",
+    "sidebar.performance": "Performance",
     "sidebar.rolesDepots": "Rôles & Dépôts",
     "sidebar.requests": "Demandes",
     "sidebar.settings": "Paramètres",
@@ -212,6 +214,7 @@ const translations: Record<Language, Record<string, string>> = {
     "auth.login.remember": "Keep me logged in",
     "auth.login.submit": "Sign In",
     "auth.login.loading": "Logging in...",
+    "auth.login.backHome": "Back to home",
     "auth.login.fillAll": "Please fill in all fields",
     "auth.login.network": "Network error. Please check your connection.",
     "auth.login.invalidResponse": "Login endpoint returned non-JSON response. Check NEXT_PUBLIC_API_URL (current: {baseUrl}).",
@@ -302,6 +305,7 @@ const translations: Record<Language, Record<string, string>> = {
     "sidebar.dashboard": "Dashboard",
     "sidebar.employees": "Employees",
     "sidebar.projects": "Projects",
+    "sidebar.performance": "Performance",
     "sidebar.rolesDepots": "Roles & Depots",
     "sidebar.requests": "Requests",
     "sidebar.settings": "Settings",
@@ -392,19 +396,28 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(() => {
-    if (typeof window === "undefined") {
-      return "fr";
-    }
-
-    const saved = window.localStorage.getItem(STORAGE_KEY) as Language | null;
-    return saved === "fr" || saved === "en" ? saved : "fr";
-  });
+  const [language, setLanguageState] = useState<Language>("fr");
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    document.documentElement.lang = language;
-    localStorage.setItem(STORAGE_KEY, language);
-  }, [language]);
+    // After hydration, read from localStorage
+    const saved = window.localStorage.getItem(STORAGE_KEY) as Language | null;
+    const languageToSet = saved === "fr" || saved === "en" ? saved : "fr";
+    
+    if (languageToSet !== language) {
+      setLanguageState(languageToSet);
+    }
+    
+    document.documentElement.lang = languageToSet;
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (isHydrated) {
+      document.documentElement.lang = language;
+      localStorage.setItem(STORAGE_KEY, language);
+    }
+  }, [language, isHydrated]);
 
   const setLanguage = (nextLanguage: Language) => {
     setLanguageState(nextLanguage);

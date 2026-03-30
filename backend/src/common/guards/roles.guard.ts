@@ -34,12 +34,7 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    // If no roles required, allow access
-    if (!requiredRoles) {
-      return true;
-    }
-
-    // Get token from header
+    // Get token from header — always required whether or not specific roles are needed
     const token = this.extractTokenFromHeader(request);
     if (!token) {
       throw new UnauthorizedException('No token provided');
@@ -77,7 +72,12 @@ export class RolesGuard implements CanActivate {
         roleName: dbUser.role?.description,
       };
 
-      // 4. Check if user has required role
+      // 4. If no specific roles required, any authenticated user is allowed
+      if (!requiredRoles) {
+        return true;
+      }
+
+      // 5. Check if user has required role
       const userRoleName = dbUser.role?.description;
 
       if (!userRoleName) {

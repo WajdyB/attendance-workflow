@@ -174,7 +174,7 @@ export class AuthService {
         await this.supabaseService.client.auth.resetPasswordForEmail(email, {
           redirectTo:
             process.env.PASSWORD_RESET_REDIRECT_URL ||
-            'http://localhost:3001/auth/reset-password',
+            'http://localhost:3000/auth/reset-password',
         });
 
       if (error) {

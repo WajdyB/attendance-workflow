@@ -208,10 +208,10 @@ export default function ProductPreviewSection() {
             <button
               key={tab.id}
               type="button"
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition cursor-pointer ${
                 activeTab === tab.id
-                  ? "bg-orange-600 text-white"
-                  : "bg-orange-50 text-stone-600 hover:bg-orange-100"
+                  ? "bg-orange-600 text-white hover:bg-orange-700"
+                  : "bg-orange-50 text-stone-600 hover:bg-orange-100 hover:text-stone-700"
               }`}
               onClick={() => setActiveTab(tab.id)}
             >

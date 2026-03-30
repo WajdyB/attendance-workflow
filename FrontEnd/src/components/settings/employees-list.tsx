@@ -145,119 +145,131 @@ export default function EmployeesList() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-stone-400">{labels.loading}</p>
+      <div className="flex items-center justify-center py-32">
+        <span className="text-sm" style={{ color: "var(--text-3)" }}>{labels.loading}</span>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-orange-400 mb-2">{labels.title}</h1>
-        <p className="text-stone-300">{labels.subtitle}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="page-title">{labels.title}</h1>
+          <p className="page-subtitle">{labels.subtitle}</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => router.push("/employees/new")} className="btn-primary">
+            <Plus size={15} />
+            {labels.add}
+          </button>
+          <button onClick={() => router.push("/employees/hierarchy")} className="btn-ghost">
+            {labels.hierarchy}
+          </button>
+          <button onClick={() => void fetchEmployees()} className="btn-ghost">
+            {labels.refresh}
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-4 bg-red-900/20 border border-red-700/50 rounded-lg text-red-400 text-sm">
+        <div className="p-4 rounded-xl text-sm" style={{ background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)" }}>
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-4 bg-green-900/20 border border-green-700/50 rounded-lg text-green-400 text-sm">
+        <div className="p-4 rounded-xl text-sm" style={{ background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }}>
           {success}
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="mb-6 flex gap-3">
-        <button
-          onClick={() => router.push("/employees/new")}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-400 rounded-lg transition-all text-sm font-medium"
-        >
-          <Plus size={16} />
-          {labels.add}
-        </button>
-        <button
-          onClick={() => router.push("/employees/hierarchy")}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/40 text-orange-300 rounded-lg transition-all text-sm font-medium"
-        >
-          {labels.hierarchy}
-        </button>
-        <button
-          onClick={() => void fetchEmployees()}
-          className="flex items-center gap-2 px-4 py-2 bg-stone-700/20 hover:bg-stone-700/30 border border-stone-600/50 text-stone-300 rounded-lg transition-all text-sm font-medium"
-        >
-          {labels.refresh}
-        </button>
-      </div>
-
       {/* Employees List */}
       {employees.length === 0 ? (
-        <div className="text-center py-12 text-stone-400">
-          <p>{labels.noEmployees}</p>
+        <div className="empty-state">
+          <p className="text-sm">{labels.noEmployees}</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {employees.map((employee) => (
+        <div className="card overflow-hidden">
+          {employees.map((employee, idx) => (
             <div
               key={employee.id}
-              className="flex items-center justify-between p-4 bg-white/70 backdrop-blur-md border border-orange-100/20 rounded-lg hover:bg-white/80 transition-colors"
+              className="flex items-center justify-between px-5 py-3.5 transition"
+              style={{
+                borderBottom: idx < employees.length - 1 ? "1px solid var(--border)" : "none",
+              }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--surface-raised)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
             >
-              {/* Employee Info */}
-              <div className="flex items-center gap-4 flex-1">
-                {/* Picture */}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
                 {employee.pictureUrl ? (
                   <img
                     src={employee.pictureUrl}
                     alt={`${employee.firstName} ${employee.lastName}`}
-                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                    className="w-9 h-9 rounded-full object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 border border-orange-500/50">
-                    <span className="text-orange-400 font-bold text-sm">
-                      {employee.firstName[0]}
-                      {employee.lastName[0]}
-                    </span>
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
+                    style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
+                  >
+                    {employee.firstName[0]}{employee.lastName[0]}
                   </div>
                 )}
-
-                {/* Name */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium">
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--text-1)" }}>
                     {employee.firstName} {employee.lastName}
                   </p>
                   {employee.jobTitle && (
-                    <p className="text-stone-300 text-sm">{employee.jobTitle}</p>
+                    <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
+                      {employee.jobTitle}
+                    </p>
                   )}
                 </div>
+                {employee.department?.name && (
+                  <span className="badge badge-stone hidden sm:inline-flex">
+                    {employee.department.name}
+                  </span>
+                )}
+                {employee.role?.description && (
+                  <span className="badge badge-orange hidden md:inline-flex">
+                    {employee.role.description}
+                  </span>
+                )}
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex items-center gap-1 ml-4">
                 <button
                   onClick={() => handleView(employee.id)}
                   title={labels.view}
-                  className="p-2 text-stone-300 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-all"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition cursor-pointer"
+                  style={{ color: "var(--text-3)" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent-dim)"; (e.currentTarget as HTMLElement).style.color = "var(--accent)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
                 >
-                  <Eye size={18} />
+                  <Eye size={15} />
                 </button>
                 <button
                   onClick={() => handleEdit(employee.id)}
                   title={labels.edit}
-                  className="p-2 text-stone-300 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-all"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition cursor-pointer"
+                  style={{ color: "var(--text-3)" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--accent-dim)"; (e.currentTarget as HTMLElement).style.color = "var(--accent)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
                 >
-                  <Edit size={18} />
+                  <Edit size={15} />
                 </button>
                 <button
                   onClick={() => openDeleteConfirmation(employee.id)}
                   disabled={deletingId === employee.id}
                   title={labels.delete}
-                  className="p-2 text-stone-300 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition disabled:opacity-40 cursor-pointer"
+                  style={{ color: "var(--text-3)" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.1)"; (e.currentTarget as HTMLElement).style.color = "#f87171"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={15} />
                 </button>
               </div>
             </div>

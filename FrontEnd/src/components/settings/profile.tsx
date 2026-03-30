@@ -4,8 +4,27 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
-import { useEffect, useMemo, useState } from "react";
-import RecentDocuments from "./documents";
+import { useEffect, useState } from "react";
+import {
+  User,
+  Phone,
+  MapPin,
+  Landmark,
+  Building2,
+  Mail,
+  Calendar,
+  TrendingUp,
+  Star,
+  FileText,
+  Loader2,
+  ChevronRight,
+  Shield,
+  BadgeCheck,
+  Users,
+} from "lucide-react";
+import DocumentsPanel from "./documents";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type DossierContract = {
   id: string;
@@ -24,6 +43,8 @@ type SalaryHistoryEntry = {
   oldSalary: string;
   newSalary: string;
   changeDate: string;
+  reason?: string;
+  approvedBy?: string;
 };
 
 type DossierProfile = {
@@ -50,14 +71,17 @@ type DossierResponse = {
   profile: DossierProfile;
   hierarchy: {
     directManager: {
+      id?: string;
       firstName: string;
       lastName: string;
+      jobTitle?: string;
       role?: { description: string } | null;
     } | null;
     supervisedCollaborators: Array<{
       id: string;
       firstName: string;
       lastName: string;
+      jobTitle?: string;
       role?: { description: string } | null;
     }>;
   };
@@ -81,291 +105,363 @@ type DossierResponse = {
   }>;
 };
 
+type Evaluation = {
+  id: string;
+  evaluationType: string;
+  evaluationDate: string;
+  globalScore?: number | null;
+  technicalScore?: number | null;
+  softSkillsScore?: number | null;
+  comments?: string | null;
+  objectives?: string | null;
+  manager?: { user: { firstName: string; lastName: string } } | null;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const fmtDate = (d: string | null | undefined, locale: string) =>
+  d ? new Date(d).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+const fmtSalary = (v: string | null | undefined) =>
+  v ? `${Number(v).toLocaleString("fr-FR")} MAD` : "—";
+
+const pctChange = (oldV: string, newV: string) => {
+  const o = Number(oldV);
+  const n = Number(newV);
+  if (!o || isNaN(o) || isNaN(n)) return null;
+  return (((n - o) / o) * 100).toFixed(1);
+};
+
+const evalTypeLabel = (type: string, fr: boolean) => {
+  const map: Record<string, [string, string]> = {
+    ANNUAL: ["Annuelle", "Annual"],
+    SEMI_ANNUAL: ["Semestrielle", "Semi-annual"],
+    PROJECT: ["Projet", "Project"],
+    "360": ["360°", "360°"],
+  };
+  const entry = map[type] ?? [type, type];
+  return fr ? entry[0] : entry[1];
+};
+
+const ScoreBadge = ({ score }: { score?: number | null }) => {
+  if (score == null) return <span style={{ color: "var(--text-3)" }}>—</span>;
+  const n = Number(score);
+  const color = n >= 4 ? "#22c55e" : n >= 3 ? "#f59e0b" : "#ef4444";
+  return (
+    <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: `${color}22`, color }}>
+      {n.toFixed(1)}/5
+    </span>
+  );
+};
+
+const Avatar = ({ firstName, lastName, size = "md" }: { firstName: string; lastName: string; size?: "sm" | "md" | "lg" }) => {
+  const initials = `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
+  const s = size === "lg" ? "w-20 h-20 text-2xl" : size === "md" ? "w-10 h-10 text-sm" : "w-8 h-8 text-xs";
+  return (
+    <div
+      className={`${s} rounded-full flex items-center justify-center font-bold flex-shrink-0`}
+      style={{ background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)" }}
+    >
+      {initials || <User size={size === "lg" ? 28 : 16} />}
+    </div>
+  );
+};
+
+const InfoRow = ({ label, value, icon }: { label: string; value?: string | null; icon?: React.ReactNode }) => (
+  <div className="flex items-center justify-between py-3" style={{ borderBottom: "1px solid var(--border)" }}>
+    <div className="flex items-center gap-2">
+      {icon && <span style={{ color: "var(--text-3)" }}>{icon}</span>}
+      <span className="text-sm" style={{ color: "var(--text-3)" }}>{label}</span>
+    </div>
+    <span className="text-sm font-medium text-right" style={{ color: value ? "var(--text-1)" : "var(--text-3)" }}>
+      {value || "—"}
+    </span>
+  </div>
+);
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+
 export default function EmployeeProfile() {
   const { databaseUser, isLoading } = useAuth();
   const { language } = useLanguage();
-  const [activeTab, setActiveTab] = useState("personal");
-  const [dossier, setDossier] = useState<DossierResponse | null>(null);
-  const [loadingDossier, setLoadingDossier] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const fr = language === "fr";
+  const locale = fr ? "fr-FR" : "en-US";
 
-  const labels = useMemo(
-    () =>
-      language === "fr"
-        ? {
-            personal: "Informations personnelles",
-            hierarchy: "Hiérarchie",
-            contracts: "Contrat & rémunération",
-            documents: "Documents",
-            id: "ID",
-            email: "E-mail",
-            department: "Département",
-            joining: "Date d'entrée",
-            phone: "Téléphone mobile",
-            phoneFixed: "Téléphone fixe",
-            location: "Adresse",
-            role: "Rôle",
-            bank: "Banque",
-            bic: "Code BIC/SWIFT",
-            rib: "RIB/IBAN",
-            cnss: "Numéro CNSS",
-            manager: "Manager direct",
-            supervised: "Collaborateurs supervisés",
-            latestContract: "Contrat actuel",
-            contractHistory: "Historique des contrats",
-            salaryHistory: "Historique des augmentations",
-            contractType: "Type",
-            weeklyHours: "Heures / semaine",
-            grossSalary: "Salaire brut",
-            netSalary: "Salaire net",
-            bonuses: "Primes",
-            benefits: "Avantages",
-            noContract: "Aucun contrat disponible",
-            loading: "Chargement du dossier...",
-            error: "Impossible de charger le dossier collaborateur.",
-            notSpecified: "Non renseigné",
-          }
-        : {
-            personal: "Personal Info",
-            hierarchy: "Hierarchy",
-            contracts: "Contract & compensation",
-            documents: "Documents",
-            id: "ID",
-            email: "Email",
-            department: "Department",
-            joining: "Joining Date",
-            phone: "Mobile Phone",
-            phoneFixed: "Landline",
-            location: "Address",
-            role: "Role",
-            bank: "Bank",
-            bic: "BIC/SWIFT",
-            rib: "RIB/IBAN",
-            cnss: "CNSS Number",
-            manager: "Direct manager",
-            supervised: "Supervised collaborators",
-            latestContract: "Current contract",
-            contractHistory: "Contract history",
-            salaryHistory: "Salary increase history",
-            contractType: "Type",
-            weeklyHours: "Weekly hours",
-            grossSalary: "Gross salary",
-            netSalary: "Net salary",
-            bonuses: "Bonuses",
-            benefits: "Benefits in kind",
-            noContract: "No contract available",
-            loading: "Loading dossier...",
-            error: "Unable to load collaborator dossier.",
-            notSpecified: "Not specified",
-          },
-    [language],
-  );
+  const [activeTab, setActiveTab] = useState<"personal" | "hierarchy" | "contracts" | "performance" | "documents">("personal");
+  const [dossier, setDossier] = useState<DossierResponse | null>(null);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loadingDossier, setLoadingDossier] = useState(false);
+  const [loadingEvals, setLoadingEvals] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!databaseUser?.id) return;
+    setLoadingDossier(true);
+    setError(null);
+    apiClient
+      .get<DossierResponse>(apiConfig.endpoints.users.dossier(databaseUser.id))
+      .then(setDossier)
+      .catch(() => setError(fr ? "Impossible de charger le dossier." : "Unable to load dossier."))
+      .finally(() => setLoadingDossier(false));
+  }, [databaseUser?.id]);
 
-    const loadDossier = async () => {
-      setLoadingDossier(true);
-      setError(null);
-
-      try {
-        const data = await apiClient.get<DossierResponse>(
-          apiConfig.endpoints.users.dossier(databaseUser.id),
-        );
-        setDossier(data);
-      } catch {
-        setError(labels.error);
-      } finally {
-        setLoadingDossier(false);
-      }
-    };
-
-    void loadDossier();
-  }, [databaseUser?.id, labels.error]);
+  useEffect(() => {
+    if (activeTab !== "performance" || !databaseUser?.id) return;
+    setLoadingEvals(true);
+    apiClient
+      .get<Evaluation[]>(apiConfig.endpoints.evaluations.byCollaborator(databaseUser.id))
+      .then((res) => setEvaluations(Array.isArray(res) ? res : []))
+      .catch(() => setEvaluations([]))
+      .finally(() => setLoadingEvals(false));
+  }, [activeTab, databaseUser?.id]);
 
   if (isLoading || loadingDossier) {
     return (
-      <div className="bg-white rounded-2xl border border-orange-100 p-8">
-        <div className="flex justify-center items-center gap-3 text-sm text-stone-600">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600"></div>
-          <span>{labels.loading}</span>
-        </div>
+      <div className="flex h-64 items-center justify-center gap-3">
+        <Loader2 size={22} className="animate-spin" style={{ color: "var(--accent)" }} />
+        <span className="text-sm" style={{ color: "var(--text-2)" }}>
+          {fr ? "Chargement du dossier…" : "Loading dossier…"}
+        </span>
       </div>
     );
   }
 
   if (error || !dossier) {
     return (
-      <div className="bg-white rounded-2xl border border-orange-100 p-8 text-sm text-red-600">
-        {error || labels.error}
+      <div className="card p-8 text-center">
+        <p className="text-sm" style={{ color: "#ef4444" }}>{error || (fr ? "Données non disponibles" : "Data unavailable")}</p>
       </div>
     );
   }
 
   const user = dossier.profile;
-  const latestContract = dossier.contracts.latest;
-  const initials = `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`;
+  const { hierarchy, contracts } = dossier;
+  const latestContract = contracts.latest;
+
+  const tabs: { key: typeof activeTab; label: string; icon: React.ReactNode }[] = [
+    { key: "personal",     label: fr ? "Informations"   : "Personal",     icon: <User size={14} /> },
+    { key: "hierarchy",    label: fr ? "Hiérarchie"     : "Hierarchy",    icon: <Users size={14} /> },
+    { key: "contracts",    label: fr ? "Contrat"        : "Contract",     icon: <FileText size={14} /> },
+    { key: "performance",  label: fr ? "Performances"   : "Performance",  icon: <Star size={14} /> },
+    { key: "documents",    label: fr ? "Documents"      : "Documents",    icon: <FileText size={14} /> },
+  ];
 
   return (
-    <div className="bg-white rounded-2xl border border-orange-100 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-orange-100">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center shadow-md">
-              <span className="text-2xl font-bold text-white">{initials || "U"}</span>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-stone-900">
-                {user.firstName} {user.lastName}
-              </h2>
-              <p className="text-sm text-stone-600 mt-1">
-                {user.jobTitle || labels.notSpecified}
-              </p>
-              <span className="inline-block mt-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
-                {user.role?.description || labels.notSpecified}
-              </span>
+    <div className="space-y-0 rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
+
+      {/* ── Profile header ── */}
+      <div className="p-6 pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="flex items-start gap-5 pb-6">
+          <Avatar firstName={user.firstName} lastName={user.lastName} size="lg" />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold" style={{ color: "var(--text-1)" }}>
+              {user.firstName} {user.lastName}
+            </h2>
+            <p className="text-sm mt-0.5" style={{ color: "var(--text-2)" }}>
+              {user.jobTitle || (fr ? "Poste non renseigné" : "No job title")}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {user.role && (
+                <span
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+                  style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
+                >
+                  <Shield size={11} />
+                  {user.role.description}
+                </span>
+              )}
+              {user.department && (
+                <span
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+                  style={{ background: "var(--bg)", color: "var(--text-2)", border: "1px solid var(--border)" }}
+                >
+                  <Building2 size={11} />
+                  {user.department.name}
+                </span>
+              )}
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-stone-400">{labels.id}</p>
-            <p className="text-sm font-mono text-stone-600">
-              {user.id.slice(-8).toUpperCase()}
+          <div className="text-right hidden sm:block">
+            <p className="text-xs" style={{ color: "var(--text-3)" }}>ID</p>
+            <p className="text-xs font-mono mt-0.5" style={{ color: "var(--text-2)" }}>
+              {user.id.slice(-10).toUpperCase()}
             </p>
           </div>
         </div>
-      </div>
 
-      <div className="p-6 border-b border-orange-100">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <p className="text-xs text-stone-400 uppercase tracking-wide">{labels.email}</p>
-            <p className="text-sm text-stone-700 mt-1">{user.personalEmail || labels.notSpecified}</p>
+        {/* Quick info bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-5">
+          <div className="flex items-center gap-2">
+            <Mail size={14} style={{ color: "var(--text-3)" }} />
+            <span className="text-xs truncate" style={{ color: "var(--text-2)" }}>
+              {user.workEmail || user.personalEmail || "—"}
+            </span>
           </div>
-          <div>
-            <p className="text-xs text-stone-400 uppercase tracking-wide">{labels.department}</p>
-            <p className="text-sm text-stone-700 mt-1">{user.department?.name || labels.notSpecified}</p>
+          <div className="flex items-center gap-2">
+            <Building2 size={14} style={{ color: "var(--text-3)" }} />
+            <span className="text-xs" style={{ color: "var(--text-2)" }}>
+              {user.department?.name || "—"}
+            </span>
           </div>
-          <div>
-            <p className="text-xs text-stone-400 uppercase tracking-wide">{labels.joining}</p>
-            <p className="text-sm text-stone-700 mt-1">
-              {new Date(user.createdAt).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US")}
-            </p>
+          <div className="flex items-center gap-2">
+            <Calendar size={14} style={{ color: "var(--text-3)" }} />
+            <span className="text-xs" style={{ color: "var(--text-2)" }}>
+              {fr ? "Depuis" : "Since"} {fmtDate(user.createdAt, locale)}
+            </span>
           </div>
         </div>
-      </div>
 
-      <div className="px-6 pt-4">
-        <div className="flex flex-wrap gap-6 border-b border-orange-100">
-          {["personal", "hierarchy", "contracts", "documents"].map((tab) => (
+        {/* Tabs */}
+        <div className="tab-bar -mb-px">
+          {tabs.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-sm font-medium transition ${
-                activeTab === tab
-                  ? "text-orange-600 border-b-2 border-orange-600"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`tab flex items-center gap-1.5 ${activeTab === tab.key ? "active" : ""}`}
             >
-              {tab === "personal"
-                ? labels.personal
-                : tab === "hierarchy"
-                  ? labels.hierarchy
-                  : tab === "contracts"
-                    ? labels.contracts
-                    : labels.documents}
+              {tab.icon}
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.icon}</span>
             </button>
           ))}
         </div>
       </div>
 
+      {/* ── Tab content ── */}
       <div className="p-6">
+
+        {/* ── Personal info ── */}
         {activeTab === "personal" && (
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.phone}</span><span className="text-stone-700">{user.phone || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.phoneFixed}</span><span className="text-stone-700">{user.phoneFixed || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.location}</span><span className="text-stone-700">{user.address || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.role}</span><span className="text-stone-700">{user.role?.description || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.bank}</span><span className="text-stone-700">{user.bankName || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.bic}</span><span className="text-stone-700">{user.bankBicSwift || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.rib}</span><span className="text-stone-700">{user.rib || labels.notSpecified}</span></div>
-            <div className="flex justify-between text-sm py-2 border-b border-orange-50"><span className="text-stone-500">{labels.cnss}</span><span className="text-stone-700">{user.cnssNumber || labels.notSpecified}</span></div>
+          <div className="space-y-6">
+            {/* Contact */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                {fr ? "Contact" : "Contact"}
+              </p>
+              <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                <div className="px-4">
+                  <InfoRow label={fr ? "E-mail professionnel" : "Work email"} value={user.workEmail} icon={<Mail size={14} />} />
+                  <InfoRow label={fr ? "E-mail personnel" : "Personal email"} value={user.personalEmail} icon={<Mail size={14} />} />
+                  <InfoRow label={fr ? "Téléphone mobile" : "Mobile"} value={user.phone} icon={<Phone size={14} />} />
+                  <InfoRow label={fr ? "Téléphone fixe" : "Landline"} value={user.phoneFixed} icon={<Phone size={14} />} />
+                  <InfoRow label={fr ? "Adresse" : "Address"} value={user.address} icon={<MapPin size={14} />} />
+                  <div className="py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span style={{ color: "var(--text-3)" }}><Calendar size={14} /></span>
+                        <span className="text-sm" style={{ color: "var(--text-3)" }}>{fr ? "Date de naissance" : "Birth date"}</span>
+                      </div>
+                      <span className="text-sm font-medium" style={{ color: user.birthdate ? "var(--text-1)" : "var(--text-3)" }}>
+                        {user.birthdate
+                          ? new Date(user.birthdate).toLocaleDateString(locale, { day: "2-digit", month: "long", year: "numeric" })
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Financial */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                {fr ? "Informations financières & administratives" : "Financial & administrative info"}
+              </p>
+              <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                <div className="px-4">
+                  <InfoRow label={fr ? "Banque" : "Bank"} value={user.bankName} icon={<Landmark size={14} />} />
+                  <InfoRow label="BIC / SWIFT" value={user.bankBicSwift} icon={<Landmark size={14} />} />
+                  <InfoRow label="RIB / IBAN" value={user.rib} icon={<Landmark size={14} />} />
+                  <InfoRow label={fr ? "Numéro CNSS" : "CNSS number"} value={user.cnssNumber} icon={<BadgeCheck size={14} />} />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
+        {/* ── Hierarchy ── */}
         {activeTab === "hierarchy" && (
-          <div className="space-y-4 text-sm">
-            <div className="rounded-xl border border-orange-100 bg-orange-50 p-4">
-              <p className="text-stone-500">{labels.manager}</p>
-              <p className="mt-1 font-medium text-stone-900">
-                {dossier.hierarchy.directManager
-                  ? `${dossier.hierarchy.directManager.firstName} ${dossier.hierarchy.directManager.lastName}`
-                  : labels.notSpecified}
+          <div className="space-y-6">
+            {/* Direct manager */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                {fr ? "Manager direct" : "Direct manager"}
               </p>
-            </div>
-            <div className="rounded-xl border border-orange-100 bg-white p-4">
-              <p className="text-stone-500 mb-2">{labels.supervised}</p>
-              {dossier.hierarchy.supervisedCollaborators.length === 0 ? (
-                <p className="text-stone-700">{labels.notSpecified}</p>
+              {hierarchy.directManager ? (
+                <div
+                  className="flex items-center gap-4 rounded-xl p-4"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                >
+                  <Avatar firstName={hierarchy.directManager.firstName} lastName={hierarchy.directManager.lastName} />
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
+                      {hierarchy.directManager.firstName} {hierarchy.directManager.lastName}
+                    </p>
+                    {hierarchy.directManager.jobTitle && (
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>
+                        {hierarchy.directManager.jobTitle}
+                      </p>
+                    )}
+                    {hierarchy.directManager.role && (
+                      <span
+                        className="mt-1.5 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}
+                      >
+                        {hierarchy.directManager.role.description}
+                      </span>
+                    )}
+                  </div>
+                  <ChevronRight size={16} className="ml-auto" style={{ color: "var(--text-3)" }} />
+                </div>
               ) : (
-                <ul className="space-y-1">
-                  {dossier.hierarchy.supervisedCollaborators.map((entry) => (
-                    <li key={entry.id} className="text-stone-800">
-                      {entry.firstName} {entry.lastName}
-                    </li>
-                  ))}
-                </ul>
+                <div
+                  className="rounded-xl p-4 text-sm text-center"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-3)" }}
+                >
+                  {fr ? "Aucun manager assigné" : "No manager assigned"}
+                </div>
               )}
             </div>
-          </div>
-        )}
 
-        {activeTab === "contracts" && (
-          <div className="space-y-4 text-sm">
-            {!latestContract ? (
-              <p className="text-stone-600">{labels.noContract}</p>
-            ) : (
-              <div className="rounded-xl border border-orange-100 bg-orange-50 p-4 space-y-2">
-                <p className="font-semibold text-stone-900">{labels.latestContract}</p>
-                <div className="flex justify-between"><span className="text-stone-500">{labels.contractType}</span><span>{latestContract.contractType}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">{labels.weeklyHours}</span><span>{latestContract.weeklyHours ?? labels.notSpecified}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">{labels.grossSalary}</span><span>{latestContract.baseSalary ?? labels.notSpecified}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">{labels.netSalary}</span><span>{latestContract.netSalary ?? labels.notSpecified}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">{labels.bonuses}</span><span>{latestContract.bonuses ?? labels.notSpecified}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">{labels.benefits}</span><span>{latestContract.benefitsInKind ?? labels.notSpecified}</span></div>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-orange-100 bg-white p-4">
-              <p className="font-semibold text-stone-900 mb-3">{labels.contractHistory}</p>
-              <div className="space-y-2">
-                {dossier.contracts.history.map((contract) => (
-                  <div key={contract.id} className="flex items-center justify-between border-b border-orange-50 pb-2 last:border-b-0">
-                    <span className="text-stone-700">{contract.contractType}</span>
-                    <span className="text-xs text-stone-500">
-                      {new Date(contract.startDate).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-orange-100 bg-white p-4">
-              <p className="font-semibold text-stone-900 mb-3">{labels.salaryHistory}</p>
-              {dossier.contracts.salaryHistory.length === 0 ? (
-                <p className="text-stone-600">{labels.notSpecified}</p>
+            {/* Supervised collaborators */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                {fr ? "Collaborateurs supervisés" : "Supervised collaborators"}
+                {hierarchy.supervisedCollaborators.length > 0 && (
+                  <span
+                    className="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
+                  >
+                    {hierarchy.supervisedCollaborators.length}
+                  </span>
+                )}
+              </p>
+              {hierarchy.supervisedCollaborators.length === 0 ? (
+                <div
+                  className="rounded-xl p-4 text-sm text-center"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-3)" }}
+                >
+                  {fr ? "Aucun collaborateur supervisé" : "No supervised collaborators"}
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {dossier.contracts.salaryHistory.map((entry) => (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {hierarchy.supervisedCollaborators.map((c) => (
                     <div
-                      key={entry.id}
-                      className="flex items-center justify-between border-b border-orange-50 pb-2 last:border-b-0"
+                      key={c.id}
+                      className="flex items-center gap-3 rounded-xl p-3"
+                      style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                     >
-                      <span className="text-stone-700">
-                        {entry.oldSalary} → {entry.newSalary}
-                      </span>
-                      <span className="text-xs text-stone-500">
-                        {new Date(entry.changeDate).toLocaleDateString(language === "fr" ? "fr-FR" : "en-US")}
-                      </span>
+                      <Avatar firstName={c.firstName} lastName={c.lastName} size="sm" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: "var(--text-1)" }}>
+                          {c.firstName} {c.lastName}
+                        </p>
+                        {(c.jobTitle || c.role) && (
+                          <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
+                            {c.jobTitle ?? c.role?.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -374,11 +470,276 @@ export default function EmployeeProfile() {
           </div>
         )}
 
+        {/* ── Contract & compensation ── */}
+        {activeTab === "contracts" && (
+          <div className="space-y-6">
+            {/* Current contract highlight */}
+            {!latestContract ? (
+              <div className="rounded-xl p-6 text-center" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                <FileText size={32} className="mx-auto mb-2 opacity-30" style={{ color: "var(--text-3)" }} />
+                <p className="text-sm" style={{ color: "var(--text-3)" }}>
+                  {fr ? "Aucun contrat disponible" : "No contract available"}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                  {fr ? "Contrat actuel" : "Current contract"}
+                </p>
+                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                  {/* Contract type header */}
+                  <div
+                    className="px-5 py-4 flex items-center justify-between"
+                    style={{ background: "color-mix(in srgb, var(--accent) 8%, transparent)", borderBottom: "1px solid var(--border)" }}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
+                        {latestContract.contractType}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>
+                        {fr ? "Depuis" : "Since"} {fmtDate(latestContract.startDate, locale)}
+                        {latestContract.endDate ? ` → ${fmtDate(latestContract.endDate, locale)}` : (fr ? " · CDI" : " · Permanent")}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                      style={{ background: "#22c55e22", color: "#22c55e" }}
+                    >
+                      {fr ? "Actif" : "Active"}
+                    </span>
+                  </div>
+
+                  {/* Salary highlight */}
+                  <div className="grid grid-cols-2 gap-px" style={{ background: "var(--border)" }}>
+                    <div className="px-5 py-4" style={{ background: "var(--surface)" }}>
+                      <p className="text-xs" style={{ color: "var(--text-3)" }}>{fr ? "Salaire brut" : "Gross salary"}</p>
+                      <p className="text-lg font-bold mt-1" style={{ color: "var(--text-1)" }}>
+                        {fmtSalary(latestContract.baseSalary)}
+                      </p>
+                    </div>
+                    <div className="px-5 py-4" style={{ background: "var(--surface)" }}>
+                      <p className="text-xs" style={{ color: "var(--text-3)" }}>{fr ? "Salaire net" : "Net salary"}</p>
+                      <p className="text-lg font-bold mt-1" style={{ color: "var(--accent)" }}>
+                        {fmtSalary(latestContract.netSalary)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="px-5" style={{ background: "var(--bg)" }}>
+                    <InfoRow label={fr ? "Heures / semaine" : "Weekly hours"} value={latestContract.weeklyHours ? `${latestContract.weeklyHours}h` : undefined} />
+                    <InfoRow label={fr ? "Primes" : "Bonuses"} value={latestContract.bonuses} />
+                    <InfoRow label={fr ? "Avantages en nature" : "Benefits in kind"} value={latestContract.benefitsInKind} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Salary increase history */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                {fr ? "Historique des augmentations" : "Salary increase history"}
+              </p>
+              {contracts.salaryHistory.length === 0 ? (
+                <div
+                  className="rounded-xl p-4 text-sm text-center"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-3)" }}
+                >
+                  {fr ? "Aucune augmentation enregistrée" : "No salary increases recorded"}
+                </div>
+              ) : (
+                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                  {contracts.salaryHistory.map((entry, idx) => {
+                    const pct = pctChange(entry.oldSalary, entry.newSalary);
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-4 px-5 py-4"
+                        style={{ borderBottom: idx < contracts.salaryHistory.length - 1 ? "1px solid var(--border)" : undefined, background: "var(--bg)" }}
+                      >
+                        <div
+                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+                          style={{ background: "#22c55e22", color: "#22c55e" }}
+                        >
+                          <TrendingUp size={14} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium" style={{ color: "var(--text-1)" }}>
+                            {fmtSalary(entry.oldSalary)} → {fmtSalary(entry.newSalary)}
+                          </p>
+                          {entry.reason && (
+                            <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-3)" }}>{entry.reason}</p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {pct && (
+                            <span className="text-xs font-bold" style={{ color: "#22c55e" }}>+{pct}%</span>
+                          )}
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>
+                            {fmtDate(entry.changeDate, locale)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Contract history */}
+            {contracts.history.length > 1 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                  {fr ? "Historique des contrats" : "Contract history"}
+                </p>
+                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                  {contracts.history.map((c, idx) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between px-5 py-3"
+                      style={{ borderBottom: idx < contracts.history.length - 1 ? "1px solid var(--border)" : undefined, background: "var(--bg)" }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-1)" }}>{c.contractType}</p>
+                        <p className="text-xs" style={{ color: "var(--text-3)" }}>
+                          {fmtDate(c.startDate, locale)}{c.endDate ? ` → ${fmtDate(c.endDate, locale)}` : ""}
+                        </p>
+                      </div>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "var(--surface)", color: "var(--text-2)", border: "1px solid var(--border)" }}
+                      >
+                        {c.contractType}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Performance ── */}
+        {activeTab === "performance" && (
+          <div className="space-y-6">
+            {loadingEvals ? (
+              <div className="flex h-40 items-center justify-center gap-2">
+                <Loader2 size={20} className="animate-spin" style={{ color: "var(--accent)" }} />
+                <span className="text-sm" style={{ color: "var(--text-2)" }}>
+                  {fr ? "Chargement…" : "Loading…"}
+                </span>
+              </div>
+            ) : evaluations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Star size={40} style={{ color: "var(--text-3)" }} className="opacity-30" />
+                <p className="text-sm" style={{ color: "var(--text-3)" }}>
+                  {fr ? "Aucune évaluation enregistrée" : "No evaluations recorded"}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Latest score highlight */}
+                {evaluations[0] && (
+                  <div
+                    className="rounded-xl p-5"
+                    style={{ background: "color-mix(in srgb, var(--accent) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 25%, transparent)" }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--accent)" }}>
+                          {fr ? "Dernière évaluation" : "Latest evaluation"}
+                        </p>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-1)" }}>
+                          {evalTypeLabel(evaluations[0].evaluationType, fr)} · {fmtDate(evaluations[0].evaluationDate, locale)}
+                        </p>
+                        {evaluations[0].manager && (
+                          <p className="text-xs mt-1" style={{ color: "var(--text-3)" }}>
+                            {fr ? "Par" : "By"}{" "}
+                            {evaluations[0].manager.user.firstName} {evaluations[0].manager.user.lastName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-3xl font-bold" style={{ color: "var(--accent)" }}>
+                          {Number(evaluations[0].globalScore ?? 0).toFixed(1)}
+                          <span className="text-sm font-normal" style={{ color: "var(--text-3)" }}>/5</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-lg p-3" style={{ background: "var(--surface)" }}>
+                        <p className="text-xs" style={{ color: "var(--text-3)" }}>{fr ? "Compétences techniques" : "Technical skills"}</p>
+                        <p className="text-sm font-semibold mt-1" style={{ color: "var(--text-1)" }}>
+                          {Number(evaluations[0].technicalScore ?? 0).toFixed(1)} / 5
+                        </p>
+                      </div>
+                      <div className="rounded-lg p-3" style={{ background: "var(--surface)" }}>
+                        <p className="text-xs" style={{ color: "var(--text-3)" }}>{fr ? "Soft skills" : "Soft skills"}</p>
+                        <p className="text-sm font-semibold mt-1" style={{ color: "var(--text-1)" }}>
+                          {Number(evaluations[0].softSkillsScore ?? 0).toFixed(1)} / 5
+                        </p>
+                      </div>
+                    </div>
+                    {evaluations[0].comments && (
+                      <p className="mt-3 text-xs italic" style={{ color: "var(--text-2)" }}>
+                        "{evaluations[0].comments}"
+                      </p>
+                    )}
+                    {evaluations[0].objectives && (
+                      <div className="mt-3 rounded-lg p-3" style={{ background: "var(--surface)" }}>
+                        <p className="text-xs font-medium mb-1" style={{ color: "var(--text-2)" }}>
+                          {fr ? "Objectifs" : "Objectives"}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--text-3)" }}>{evaluations[0].objectives}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Evaluation history */}
+                {evaluations.length > 1 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                      {fr ? "Historique des évaluations" : "Evaluation history"}
+                    </p>
+                    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                      {evaluations.slice(1).map((ev, idx) => (
+                        <div
+                          key={ev.id}
+                          className="flex items-center gap-4 px-5 py-4"
+                          style={{ borderBottom: idx < evaluations.length - 2 ? "1px solid var(--border)" : undefined, background: "var(--bg)" }}
+                        >
+                          <div
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                            style={{ background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}
+                          >
+                            <Star size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium" style={{ color: "var(--text-1)" }}>
+                              {evalTypeLabel(ev.evaluationType, fr)}
+                            </p>
+                            <p className="text-xs" style={{ color: "var(--text-3)" }}>
+                              {fmtDate(ev.evaluationDate, locale)}
+                              {ev.manager ? ` · ${ev.manager.user.firstName} ${ev.manager.user.lastName}` : ""}
+                            </p>
+                          </div>
+                          <ScoreBadge score={ev.globalScore} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Documents ── */}
         {activeTab === "documents" && (
-          <RecentDocuments userId={user.id} initialDocuments={dossier.documents} />
+          <DocumentsPanel userId={user.id} initialDocuments={dossier.documents} />
         )}
       </div>
     </div>
   );
 }
-

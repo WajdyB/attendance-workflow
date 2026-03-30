@@ -46,17 +46,18 @@ export class DepartmentsController {
   }
 
   @Patch(':id')
+  @RequireRoles(Role.ADMIN)
   async update(
-    @Param('id') id: string, // ✅ FIXED: Keep as string
+    @Param('id') id: string,
     @Body() updateDepartmentDto: Prisma.DepartmentUpdateInput,
   ) {
     return this.departmentsService.update(id, updateDepartmentDto);
   }
 
   @Delete(':id')
+  @RequireRoles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
-    // ✅ FIXED: Keep as string
     await this.departmentsService.remove(id);
     return;
   }

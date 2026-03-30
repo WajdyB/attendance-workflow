@@ -43,7 +43,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                   this.setState({ hasError: false, error: null });
                   window.location.href = "/";
                 }}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded transition-all cursor-pointer font-medium"
               >
                 Go Home
               </button>

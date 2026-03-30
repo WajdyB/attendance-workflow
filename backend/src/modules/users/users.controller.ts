@@ -22,10 +22,12 @@ import { RequireRoles } from '../../common/decorator/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
 
 @Controller('users')
+@UseGuards(RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('add')
+  @RequireRoles(Role.ADMIN)
   async createUser(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
@@ -54,8 +56,7 @@ export class UsersController {
   }
 
   @Patch(':id/password')
-  @UseGuards(RolesGuard)
-  @RequireRoles(Role.ADMIN, Role.SUPER_ADMIN)
+  @RequireRoles(Role.ADMIN)
   async updatePassword(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateUserPasswordDto: UpdateUserPasswordDto,
@@ -67,6 +68,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @RequireRoles(Role.ADMIN)
   async delete(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersService.delete(id);
   }
@@ -86,6 +88,7 @@ export class UsersController {
   }
 
   @Post(':collaboratorId/manager/:managerId')
+  @RequireRoles(Role.ADMIN)
   async setManager(
     @Param('collaboratorId', new ParseUUIDPipe()) collaboratorId: string,
     @Param('managerId', new ParseUUIDPipe()) managerId: string,

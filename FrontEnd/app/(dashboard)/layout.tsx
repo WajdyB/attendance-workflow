@@ -14,11 +14,13 @@ export default function DashboardLayout({
   return (
     <ErrorBoundary>
       <ProtectedRoute>
-        <div className="flex h-screen bg-gradient-to-b from-orange-50 to-white text-white">
+        <div className="flex h-screen" style={{ background: "var(--bg)" }}>
           <Sidebar />
-          <div className="flex flex-col flex-1">
+          <div className="flex flex-col flex-1 min-w-0">
             <Navbar />
-            <main className="flex-1 overflow-auto p-6 md:p-8">{children}</main>
+            <main className="flex-1 overflow-auto p-6 md:p-8" style={{ color: "var(--text-1)" }}>
+              {children}
+            </main>
           </div>
         </div>
       </ProtectedRoute>
