@@ -1,6 +1,38 @@
 // app/utils/api-config.ts
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+/**
+ * Backend base URL used for all API calls. Must be an absolute http(s) URL.
+ * If NEXT_PUBLIC_API_URL is missing, "/", or points at the Next dev server (port 3000),
+ * we fall back to the NestJS default so fetch() never becomes same-origin to Next.js
+ * (which would log GET /users/... /notifications/... as 404 on the frontend).
+ */
+const DEFAULT_BACKEND_URL = 'http://localhost:3001';
+
+function resolveBackendBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!raw || raw === '/') {
+    return DEFAULT_BACKEND_URL;
+  }
+  let base = raw.replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) {
+    return DEFAULT_BACKEND_URL;
+  }
+  try {
+    const u = new URL(base);
+    const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+    const isLocal =
+      u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    // Misconfiguration: API URL set to the Next.js app port
+    if (isLocal && port === '3000' && !u.pathname.startsWith('/api')) {
+      return DEFAULT_BACKEND_URL;
+    }
+  } catch {
+    return DEFAULT_BACKEND_URL;
+  }
+  return base;
+}
+
+const API_URL = resolveBackendBaseUrl();
 
 export const apiConfig = {
   baseUrl: API_URL,

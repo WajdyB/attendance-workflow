@@ -13,6 +13,23 @@ interface FetchOptions extends RequestInit {
 }
 
 class ApiClient {
+  /**
+   * Ensures API calls always hit the NestJS server. Relative paths (e.g. "/users/...")
+   * would otherwise be sent to the Next.js origin and show up as [frontend] 404s.
+   */
+  private resolveRequestUrl(url: string): string {
+    const trimmed = url.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+    const base =
+      apiConfig.baseUrl && apiConfig.baseUrl.length > 0
+        ? apiConfig.baseUrl
+        : 'http://localhost:3001';
+    const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `${base.replace(/\/+$/, '')}${path}`;
+  }
+
   async request<T>(
     url: string,
     options: FetchOptions = {},
@@ -24,11 +41,13 @@ class ApiClient {
       ...fetchOptions
     } = options;
 
+    const resolvedUrl = this.resolveRequestUrl(url);
+
     try {
       const isFormData =
         typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
 
-      const response = await fetch(url, {
+      const response = await fetch(resolvedUrl, {
         ...fetchOptions,
         headers: {
           ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
@@ -89,8 +108,8 @@ class ApiClient {
       return response.json() as Promise<T>;
     } catch (error) {
       if (retryAlternateLocalhost && error instanceof TypeError) {
-        const fallbackUrl = this.getAlternateLocalhostUrl(url);
-        if (fallbackUrl && fallbackUrl !== url) {
+        const fallbackUrl = this.getAlternateLocalhostUrl(resolvedUrl);
+        if (fallbackUrl && fallbackUrl !== resolvedUrl) {
           try {
             return await this.request<T>(fallbackUrl, {
               ...options,

@@ -100,6 +100,16 @@ npm install
 npm run dev
 ```
 
+The frontend `dev` script picks **port 3000** when it is free; if something else is already bound to 3000, it tries **3002, 3003, …** (never **3001**, reserved for the API). Check the terminal for the exact URL (e.g. `http://localhost:3002`).
+
+**Only one Next.js dev server** should run per `FrontEnd/` folder at a time. If you start a second instance while another is still running, you may see **lockfile** or **EADDRINUSE** errors.
+
+#### Frontend dev won’t start (common on Windows)
+
+1. **Port in use (`EADDRINUSE`)** — Stop other `npm run dev` terminals, then in **Task Manager** end stray **Node.js** processes and run `npm run dev` again.
+2. **Unable to acquire lock / Access denied on `.next`** — Stop **all** Node processes, delete the folder `FrontEnd/.next`, then run `npm run dev` again.
+3. **Wrong API URL / 404 on `/users/...` in the browser** — Ensure `FrontEnd/.env.local` has `NEXT_PUBLIC_API_URL=http://localhost:3001` and restart the dev server.
+
 ### Database Setup
 
 ```bash
