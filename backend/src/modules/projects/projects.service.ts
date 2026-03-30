@@ -9,6 +9,7 @@ import { ProjectStatus, Prisma } from '@prisma/client';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AssignMemberDto } from './dto/assign-member.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { NotificationsService, buildTitle } from '../notifications/notifications.service';
 
 const PROJECT_INCLUDE = {
   lead: {
@@ -40,7 +41,10 @@ const PROJECT_INCLUDE = {
 export class ProjectsService {
   private readonly logger = new Logger(ProjectsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +104,55 @@ export class ProjectsService {
     };
   }
 
+  async findByManager(managerId: string) {
+    // Return projects where this manager is the lead OR at least one of
+    // their supervised collaborators has an active assignment.
+    const manager = await this.prisma.manager.findUnique({
+      where: { id: managerId },
+      include: { collaborators: { select: { id: true } } },
+    });
+
+    if (!manager) return this.findAll();
+
+    const superviseeIds = manager.collaborators.map((c) => c.id);
+
+    const projects = await this.prisma.project.findMany({
+      where: {
+        OR: [
+          { leadId: managerId },
+          {
+            assignments: {
+              some: {
+                collaboratorId: { in: superviseeIds },
+                unassignedAt: null,
+              },
+            },
+          },
+        ],
+      },
+      include: PROJECT_INCLUDE,
+      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+    });
+
+    const projectIds = projects.map((p) => p.id);
+    const hourTotals = await this.prisma.timesheetEntry.groupBy({
+      by: ['projectId'],
+      where: { projectId: { in: projectIds } },
+      _sum: { hours: true },
+    });
+    const hoursMap = new Map(
+      hourTotals.map((h) => [h.projectId, Number(h._sum.hours ?? 0)]),
+    );
+    return projects.map((p) => ({
+      ...p,
+      totalHoursLogged: hoursMap.get(p.id) ?? 0,
+      budgetHoursUsedPct:
+        p.budgetHours && hoursMap.get(p.id) !== undefined
+          ? Math.round(((hoursMap.get(p.id) ?? 0) / Number(p.budgetHours)) * 100)
+          : null,
+    }));
+  }
+
   async findByUser(userId: string) {
     const collaborator = await this.prisma.collaborator.findUnique({
       where: { id: userId },
@@ -114,7 +167,13 @@ export class ProjectsService {
     });
 
     if (!collaborator) {
-      // Might be a manager or admin — return all
+      // Check if this is a manager — return only their scoped projects
+      const isManager = await this.prisma.manager.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      if (isManager) return this.findByManager(userId);
+      // Admin or unknown role — return all
       return this.findAll();
     }
 
@@ -205,10 +264,11 @@ export class ProjectsService {
   }
 
   async assignMember(projectId: string, dto: AssignMemberDto) {
-    await this.findOne(projectId);
+    const project = await this.findOne(projectId);
 
     const collaborator = await this.prisma.collaborator.findUnique({
       where: { id: dto.collaboratorId },
+      include: { user: { select: { id: true, firstName: true, lastName: true } } },
     });
     if (!collaborator) throw new NotFoundException('Collaborator not found');
 
@@ -221,7 +281,7 @@ export class ProjectsService {
     });
     if (existing) throw new ConflictException('Member already assigned to this project');
 
-    return this.prisma.projectAssignment.create({
+    const assignment = await this.prisma.projectAssignment.create({
       data: {
         projectId,
         collaboratorId: dto.collaboratorId,
@@ -244,6 +304,15 @@ export class ProjectsService {
         },
       },
     });
+
+    // Notify the collaborator
+    await this.notifications.create(
+      collaborator.user.id,
+      buildTitle('PROJECT', 'Assigné à un projet'),
+      `Vous avez été assigné au projet "${(project as any).name}"${dto.roleOnProject ? ` en tant que ${dto.roleOnProject}` : ''}.`,
+    );
+
+    return assignment;
   }
 
   async removeMember(projectId: string, collaboratorId: string) {

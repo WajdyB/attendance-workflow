@@ -79,7 +79,8 @@ export class EvaluationsController {
   @RequireRoles(Role.ADMIN, Role.MANAGER)
   async create(@Req() req: AuthenticatedRequest, @Body() dto: CreateEvaluationDto) {
     const managerId = (req.user as any)?.id ?? '';
-    return this.evaluationsService.create(managerId, dto);
+    const isAdmin = [Role.ADMIN].includes((req.user as any)?.roleName);
+    return this.evaluationsService.create(managerId, dto, isAdmin);
   }
 
   @Patch(':id')

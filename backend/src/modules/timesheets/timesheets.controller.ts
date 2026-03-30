@@ -14,6 +14,8 @@ import { UpsertTimesheetDraftDto } from './dto/upsert-timesheet-draft.dto';
 import { ApproveTimesheetDto } from './dto/approve-timesheet.dto';
 import { RejectTimesheetDto } from './dto/reject-timesheet.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { RequireRoles } from '../../common/decorator/roles.decorator';
+import { Role } from '../../common/enums/role.enum';
 import type { Response } from 'express';
 
 @Controller('timesheets')
@@ -37,6 +39,7 @@ export class TimesheetsController {
   }
 
   @Post(':id/approve')
+  @RequireRoles(Role.MANAGER, Role.ADMIN)
   async approve(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: ApproveTimesheetDto,
@@ -45,6 +48,7 @@ export class TimesheetsController {
   }
 
   @Post(':id/reject')
+  @RequireRoles(Role.MANAGER, Role.ADMIN)
   async reject(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: RejectTimesheetDto,
@@ -61,6 +65,7 @@ export class TimesheetsController {
   }
 
   @Get('manager/:managerId/submitted')
+  @RequireRoles(Role.MANAGER, Role.ADMIN)
   async findSubmittedForManager(
     @Param('managerId', new ParseUUIDPipe()) managerId: string,
   ) {
@@ -94,6 +99,21 @@ export class TimesheetsController {
     @Query('month') month: string,
   ) {
     return this.timesheetsService.getProjectTotals(Number(year), Number(month));
+  }
+
+  @Get('reports/admin/monthly')
+  @RequireRoles(Role.ADMIN)
+  async getAdminMonthlyStats(
+    @Query('year') year: string,
+    @Query('month') month: string,
+  ) {
+    const stats = await this.timesheetsService.getAdminMonthlyStats(
+      Number(year),
+      Number(month),
+    );
+    // Exclude raw timesheet/entry arrays from the JSON response
+    const { timesheets: _ts, ...summary } = stats;
+    return summary;
   }
 
   @Get('export/excel')

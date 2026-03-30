@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EvaluationType, Prisma } from '@prisma/client';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { NotificationsService, buildTitle } from '../notifications/notifications.service';
 
 const EVALUATION_INCLUDE = {
   manager: {
@@ -43,7 +44,10 @@ const EVALUATION_INCLUDE = {
 export class EvaluationsService {
   private readonly logger = new Logger(EvaluationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
 
@@ -89,12 +93,20 @@ export class EvaluationsService {
     });
   }
 
-  async create(managerId: string, dto: CreateEvaluationDto) {
-    // Verify collaborator exists and belongs to this manager
+  async create(managerId: string, dto: CreateEvaluationDto, isAdmin = false) {
+    // Verify collaborator exists
     const collaborator = await this.prisma.collaborator.findUnique({
       where: { id: dto.collaboratorId },
+      include: { user: { select: { id: true, firstName: true, lastName: true } } },
     });
     if (!collaborator) throw new NotFoundException('Collaborator not found');
+
+    // Managers can only evaluate their own supervised collaborators
+    if (!isAdmin && collaborator.managerId !== managerId) {
+      throw new ForbiddenException(
+        'You can only evaluate collaborators that are under your supervision',
+      );
+    }
 
     const evaluation = await this.prisma.evaluation.create({
       data: {
@@ -112,6 +124,20 @@ export class EvaluationsService {
       },
       include: EVALUATION_INCLUDE,
     });
+
+    // Notify the collaborator
+    const evalTypeLabel: Record<string, string> = {
+      ANNUAL: 'annuelle',
+      SEMI_ANNUAL: 'semestrielle',
+      PROJECT: 'de projet',
+      FEEDBACK_360: '360°',
+    };
+    const typeLabel = evalTypeLabel[dto.evaluationType ?? 'ANNUAL'] ?? '';
+    await this.notifications.create(
+      collaborator.user.id,
+      buildTitle('EVALUATION', 'Nouvelle évaluation de performance'),
+      `Une évaluation ${typeLabel} a été réalisée pour vous. Consultez votre dossier pour en voir les détails.`,
+    );
 
     this.logger.log(`Evaluation created: ${evaluation.id} by manager ${managerId}`);
     return evaluation;

@@ -37,12 +37,13 @@ interface Project {
 
 interface LeaveRequest {
   id: string;
-  leaveType: string;
+  leaveType?: string;
   status: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
-  startDate: string;
-  endDate: string;
-  workingDays?: number;
-  user?: { firstName: string; lastName: string };
+  leaveStartDate?: string;
+  leaveEndDate?: string;
+  createdAt: string;
+  workingDaysCount?: number;
+  submitter?: { firstName: string; lastName: string; department?: { name: string } };
 }
 
 interface Evaluation {
@@ -107,8 +108,11 @@ function buildMonthlyRequestTrend(requests: LeaveRequest[]) {
   for (let m = 1; m <= 12; m++) byMonth[m] = { approved: 0, rejected: 0, pending: 0 };
 
   requests.forEach((r) => {
-    const d = new Date(r.startDate);
-    if (d.getFullYear() !== year) return;
+    // Use leaveStartDate if available, fall back to createdAt for requests without dates
+    const dateStr = r.leaveStartDate ?? r.createdAt;
+    if (!dateStr) return;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime()) || d.getFullYear() !== year) return;
     const m = d.getMonth() + 1;
     if (r.status === "APPROVED") byMonth[m].approved++;
     else if (r.status === "REJECTED") byMonth[m].rejected++;
@@ -338,7 +342,7 @@ export default function AdminDashboard() {
   // ── Recent items ──────────────────────────────────────────────────────────
 
   const recentRequests = [...s.requests]
-    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+    .sort((a, b) => new Date(b.leaveStartDate ?? b.createdAt).getTime() - new Date(a.leaveStartDate ?? a.createdAt).getTime())
     .slice(0, 6);
 
   const recentEvals = [...s.evaluations]
@@ -631,10 +635,10 @@ export default function AdminDashboard() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate" style={{ color: "var(--text-1)" }}>
-                      {r.user ? `${r.user.firstName} ${r.user.lastName}` : "—"}
+                      {r.submitter ? `${r.submitter.firstName} ${r.submitter.lastName}` : "—"}
                     </p>
                     <p className="text-[11px]" style={{ color: "var(--text-3)" }}>
-                      {r.leaveType} · {new Date(r.startDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+                      {r.leaveType ?? "—"} · {r.leaveStartDate ? new Date(r.leaveStartDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : "—"}
                     </p>
                   </div>
                   <span

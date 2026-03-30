@@ -18,6 +18,7 @@ import { RequestsModule } from './modules/requests/requests.module';
 import { HolidaysModule } from './modules/holidays/holidays.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { EvaluationsModule } from './modules/evaluations/evaluations.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { EvaluationsModule } from './modules/evaluations/evaluations.module';
     HolidaysModule,
     ProjectsModule,
     EvaluationsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService, SupabaseProvider],

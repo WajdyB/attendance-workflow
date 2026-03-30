@@ -269,6 +269,7 @@ function RequestsContent() {
                 requests={requests}
                 userId={userId}
                 onUpdate={handleRequestUpdate}
+                isAdmin
               />
             )}
           </div>

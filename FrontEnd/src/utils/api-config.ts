@@ -138,10 +138,18 @@ export const apiConfig = {
         `${API_URL}/timesheets/reports/user/${userId}/monthly?year=${year}&month=${month}`,
       projectTotals: (year: number, month: number) =>
         `${API_URL}/timesheets/reports/projects/totals?year=${year}&month=${month}`,
+      adminStats: (year: number, month: number) =>
+        `${API_URL}/timesheets/reports/admin/monthly?year=${year}&month=${month}`,
       exportExcel: (year: number, month: number) =>
         `${API_URL}/timesheets/export/excel?year=${year}&month=${month}`,
       exportPdf: (year: number, month: number) =>
         `${API_URL}/timesheets/export/pdf?year=${year}&month=${month}`,
+    },
+    notifications: {
+      byUser: (userId: string) => `${API_URL}/notifications/user/${userId}`,
+      unreadCount: (userId: string) => `${API_URL}/notifications/user/${userId}/count`,
+      markSeen: (id: string) => `${API_URL}/notifications/${id}/seen`,
+      markAllSeen: (userId: string) => `${API_URL}/notifications/user/${userId}/read-all`,
     },
   },
 };

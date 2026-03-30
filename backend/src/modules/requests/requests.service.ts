@@ -10,11 +10,11 @@ import {
   RequestStatus,
   RequestType,
   LeaveType,
-  NotificationChannel,
   ApprovalStatus,
   SalaryIncreaseReason,
   Prisma,
 } from '@prisma/client';
+import { NotificationsService, buildTitle } from '../notifications/notifications.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { DecideRequestDto } from './dto/decide-request.dto';
 import { UpdateBalanceDto } from './dto/update-balance.dto';
@@ -48,7 +48,10 @@ const REQUEST_INCLUDE = {
 export class RequestsService {
   private readonly logger = new Logger(RequestsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -119,25 +122,6 @@ export class RequestsService {
         remainingDays: new Decimal(18),
       },
     });
-  }
-
-  private async createNotification(
-    recipientId: string,
-    title: string,
-    message: string,
-  ) {
-    try {
-      await this.prisma.notification.create({
-        data: {
-          recipientId,
-          channel: NotificationChannel.IN_APP,
-          title,
-          message,
-        },
-      });
-    } catch (err) {
-      this.logger.warn(`Notification creation failed: ${String(err)}`);
-    }
   }
 
   // ─── CRUD ───────────────────────────────────────────────────────────────────
@@ -296,16 +280,21 @@ export class RequestsService {
       include: REQUEST_INCLUDE,
     });
 
-    // Notify manager
+    // Notify manager + admins
     const managerId = request.submitter.collaborator?.managerId;
+    const submitterName = `${request.submitter.firstName} ${request.submitter.lastName}`;
+    const leaveLabel = request.leaveType ?? 'leave';
     if (managerId) {
-      const submitterName = `${request.submitter.firstName} ${request.submitter.lastName}`;
-      await this.createNotification(
+      await this.notifications.create(
         managerId,
-        'New Leave Request',
-        `${submitterName} submitted a leave request requiring your approval.`,
+        buildTitle('LEAVE_REQUEST', 'Nouvelle demande de congé'),
+        `${submitterName} a soumis une demande de congé (${leaveLabel}) en attente de votre approbation.`,
       );
     }
+    await this.notifications.notifyAdmins(
+      buildTitle('LEAVE_REQUEST', 'Nouvelle demande de congé'),
+      `${submitterName} a soumis une demande de congé (${leaveLabel}).`,
+    );
 
     this.logger.log(`Request ${id} submitted for approval`);
     return updated;
@@ -318,10 +307,26 @@ export class RequestsService {
       throw new BadRequestException('Only pending requests can be approved');
     }
 
-    const manager = await this.prisma.manager.findUnique({
+    // Allow admins to approve even if they are not in the manager table
+    const isAdmin = await this.isAdminUser(dto.managerId);
+    const managerRecord = await this.prisma.manager.findUnique({
       where: { id: dto.managerId },
+      include: { collaborators: { select: { id: true } } },
     });
-    if (!manager) throw new NotFoundException('Manager not found');
+    if (!isAdmin && !managerRecord) {
+      throw new NotFoundException('Manager not found');
+    }
+    // Managers can only approve requests from their own supervisees
+    if (!isAdmin && managerRecord) {
+      const superviseeIds = new Set(managerRecord.collaborators.map((c) => c.id));
+      if (!superviseeIds.has(request.submittedBy)) {
+        throw new ForbiddenException(
+          'You can only approve requests from members of your team',
+        );
+      }
+    }
+    // decidedBy FK points to the Manager table — store null for admins
+    const decidedBy = managerRecord ? dto.managerId : null;
 
     // Move pending → used in balance
     if (
@@ -353,7 +358,7 @@ export class RequestsService {
       where: { id },
       data: {
         status: RequestStatus.APPROVED,
-        decidedBy: dto.managerId,
+        decidedBy,
         decisionComment: dto.decisionComment,
       },
       include: REQUEST_INCLUDE,
@@ -383,7 +388,7 @@ export class RequestsService {
       await this.prisma.salaryHistory.create({
         data: {
           userId: request.submittedBy,
-          validatedBy: dto.managerId,
+          validatedBy: decidedBy ?? dto.managerId,
           oldSalary: currentSalary,
           newSalary: request.proposedSalary,
           changeDate: request.effectiveDate,
@@ -399,12 +404,12 @@ export class RequestsService {
     }
 
     const isLeave = request.requestType === RequestType.LEAVE;
-    await this.createNotification(
+    await this.notifications.create(
       request.submittedBy,
-      isLeave ? 'Leave Request Approved' : 'Salary Augmentation Approved',
+      buildTitle('LEAVE_REQUEST', isLeave ? 'Demande de congé approuvée' : 'Augmentation salariale approuvée'),
       isLeave
-        ? `Your leave request has been approved.${dto.decisionComment ? ` Comment: ${dto.decisionComment}` : ''}`
-        : `Your salary augmentation request has been approved.${dto.decisionComment ? ` Comment: ${dto.decisionComment}` : ''}`,
+        ? `Votre demande de congé a été approuvée.${dto.decisionComment ? ` Commentaire : ${dto.decisionComment}` : ''}`
+        : `Votre demande d'augmentation salariale a été approuvée.${dto.decisionComment ? ` Commentaire : ${dto.decisionComment}` : ''}`,
     );
 
     this.logger.log(`Request ${id} approved by manager ${dto.managerId}`);
@@ -418,10 +423,24 @@ export class RequestsService {
       throw new BadRequestException('Only pending requests can be rejected');
     }
 
-    const manager = await this.prisma.manager.findUnique({
+    const isAdmin = await this.isAdminUser(dto.managerId);
+    const managerRecord = await this.prisma.manager.findUnique({
       where: { id: dto.managerId },
+      include: { collaborators: { select: { id: true } } },
     });
-    if (!manager) throw new NotFoundException('Manager not found');
+    if (!isAdmin && !managerRecord) {
+      throw new NotFoundException('Manager not found');
+    }
+    // Managers can only reject requests from their own supervisees
+    if (!isAdmin && managerRecord) {
+      const superviseeIds = new Set(managerRecord.collaborators.map((c) => c.id));
+      if (!superviseeIds.has(request.submittedBy)) {
+        throw new ForbiddenException(
+          'You can only reject requests from members of your team',
+        );
+      }
+    }
+    const decidedBy = managerRecord ? dto.managerId : null;
 
     // Restore balance
     if (
@@ -453,27 +472,39 @@ export class RequestsService {
       where: { id },
       data: {
         status: RequestStatus.REJECTED,
-        decidedBy: dto.managerId,
+        decidedBy,
         decisionComment: dto.decisionComment,
       },
       include: REQUEST_INCLUDE,
     });
 
-    await this.createNotification(
+    await this.notifications.create(
       request.submittedBy,
-      'Leave Request Rejected',
-      `Your leave request has been rejected.${dto.decisionComment ? ` Reason: ${dto.decisionComment}` : ''}`,
+      buildTitle('LEAVE_REQUEST', 'Demande de congé refusée'),
+      `Votre demande de congé a été refusée.${dto.decisionComment ? ` Raison : ${dto.decisionComment}` : ''}`,
     );
 
     this.logger.log(`Request ${id} rejected by manager ${dto.managerId}`);
     return updated;
   }
 
+  private async isAdminUser(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: { select: { description: true } } },
+    });
+    return (
+      user?.role?.description?.toLowerCase().includes('admin') ?? false
+    );
+  }
+
   async cancel(id: string, userId: string) {
     const request = await this.prisma.request.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('Request not found');
 
-    if (request.submittedBy !== userId) {
+    const isAdmin = await this.isAdminUser(userId);
+
+    if (!isAdmin && request.submittedBy !== userId) {
       throw new ForbiddenException('You can only cancel your own requests');
     }
 
@@ -519,6 +550,15 @@ export class RequestsService {
       include: REQUEST_INCLUDE,
     });
 
+    // Notify submitter when an admin cancels their request
+    if (isAdmin && request.submittedBy !== userId) {
+      await this.notifications.create(
+        request.submittedBy,
+        buildTitle('LEAVE_REQUEST', 'Demande de congé annulée'),
+        `Votre demande de congé a été annulée par un administrateur.`,
+      );
+    }
+
     this.logger.log(`Request ${id} cancelled by user ${userId}`);
     return updated;
   }
@@ -534,13 +574,24 @@ export class RequestsService {
   }
 
   async findPendingForManager(managerId: string) {
-    const manager = await this.prisma.manager.findUnique({
-      where: { id: managerId },
-      include: { collaborators: { select: { id: true } } },
-    });
-    if (!manager) throw new NotFoundException('Manager not found');
+    const isAdmin = await this.isAdminUser(managerId);
 
-    const collaboratorIds = manager.collaborators.map((c) => c.id);
+    let collaboratorIds: string[];
+
+    if (isAdmin) {
+      // Admin sees all pending requests
+      const allCollaborators = await this.prisma.collaborator.findMany({
+        select: { id: true },
+      });
+      collaboratorIds = allCollaborators.map((c) => c.id);
+    } else {
+      const manager = await this.prisma.manager.findUnique({
+        where: { id: managerId },
+        include: { collaborators: { select: { id: true } } },
+      });
+      if (!manager) throw new NotFoundException('Manager not found');
+      collaboratorIds = manager.collaborators.map((c) => c.id);
+    }
 
     return this.prisma.request.findMany({
       where: {

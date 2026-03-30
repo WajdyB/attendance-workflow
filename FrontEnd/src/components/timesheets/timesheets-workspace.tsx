@@ -59,6 +59,19 @@ interface ProjectTotal {
   projectId: string;
   projectName: string;
   totalHours: number;
+  contributorsCount?: number;
+}
+
+interface AdminStats {
+  year: number;
+  month: number;
+  totalTimesheets: number;
+  uniqueEmployees: number;
+  totalHours: number;
+  overtimeHours: number;
+  projectCount: number;
+  byStatus: Record<string, number>;
+  projectTotals: ProjectTotal[];
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -171,24 +184,25 @@ function AdminTimesheets({ userId, t }: { userId: string; t: (k: string) => stri
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [projectTotals, setProjectTotals] = useState<ProjectTotal[]>([]);
-  const [monthlyReport, setMonthlyReport] = useState<MonthlyReport | null>(null);
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const [exportSuccess, setExportSuccess] = useState<"excel" | "pdf" | null>(null);
   const [tab, setTab] = useState<"overview" | "export">("overview");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [totalsRes, reportRes] = await Promise.allSettled([
+      const [totalsRes, statsRes] = await Promise.allSettled([
         apiClient.get<ProjectTotal[]>(apiConfig.endpoints.timesheets.projectTotals(year, month)),
-        apiClient.get<MonthlyReport>(apiConfig.endpoints.timesheets.monthlyReport(userId, year, month)),
+        apiClient.get<AdminStats>(apiConfig.endpoints.timesheets.adminStats(year, month)),
       ]);
       if (totalsRes.status === "fulfilled") setProjectTotals(totalsRes.value ?? []);
-      if (reportRes.status === "fulfilled") setMonthlyReport(reportRes.value);
+      if (statsRes.status === "fulfilled") setAdminStats(statsRes.value);
     } finally {
       setLoading(false);
     }
-  }, [year, month, userId]);
+  }, [year, month]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -196,6 +210,7 @@ function AdminTimesheets({ userId, t }: { userId: string; t: (k: string) => stri
     const token = (typeof window !== "undefined" && (localStorage.getItem("token") || sessionStorage.getItem("token"))) ?? null;
     if (!token) return;
     setExporting(format);
+    setExportSuccess(null);
     try {
       const url = format === "excel"
         ? apiConfig.endpoints.timesheets.exportExcel(year, month)
@@ -205,23 +220,33 @@ function AdminTimesheets({ userId, t }: { userId: string; t: (k: string) => stri
       const blob = await res.blob();
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = `timesheets-${year}-${String(month).padStart(2, "0")}.${format === "excel" ? "csv" : "pdf"}`;
+      link.download = `rapport-feuilles-${year}-${String(month).padStart(2, "0")}.${format === "excel" ? "csv" : "pdf"}`;
       link.click();
       URL.revokeObjectURL(link.href);
+      setExportSuccess(format);
+      setTimeout(() => setExportSuccess(null), 3000);
     } catch { /* silent */ }
     finally { setExporting(null); }
   };
 
-  const totalHours = projectTotals.reduce((s, p) => s + Number(p.totalHours ?? 0), 0);
-  const topProject = projectTotals.sort((a, b) => b.totalHours - a.totalHours)[0];
+  const totalHours = adminStats?.totalHours ?? projectTotals.reduce((s, p) => s + Number(p.totalHours ?? 0), 0);
+  const overtimeHours = adminStats?.overtimeHours ?? 0;
+  const topProject = [...projectTotals].sort((a, b) => Number(b.totalHours) - Number(a.totalHours))[0];
 
   const prevMonth = () => { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); };
 
-  const chartData = projectTotals
+  const chartData = [...projectTotals]
     .sort((a, b) => Number(b.totalHours) - Number(a.totalHours))
     .slice(0, 10)
     .map(p => ({ name: p.projectName.length > 20 ? p.projectName.slice(0, 18) + "…" : p.projectName, hours: Number(Number(p.totalHours ?? 0).toFixed(1)) }));
+
+  const STATUS_COLORS: Record<string, string> = {
+    APPROVED: "#22c55e", SUBMITTED: "#60a5fa", DRAFT: "#94a3b8", REJECTED: "#f87171",
+  };
+  const STATUS_LABELS_FR: Record<string, string> = {
+    APPROVED: "Approuvées", SUBMITTED: "Soumises", DRAFT: "Brouillons", REJECTED: "Rejetées",
+  };
 
   return (
     <div className="space-y-6">
@@ -242,114 +267,293 @@ function AdminTimesheets({ userId, t }: { userId: string; t: (k: string) => stri
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total heures loggées", value: loading ? "…" : `${Number(totalHours).toFixed(0)}h`, color: ACCENT },
-          { label: "Projets actifs", value: loading ? "…" : String(projectTotals.length), color: "#3b82f6" },
-          { label: "Heures supp.", value: loading ? "…" : monthlyReport ? `${Number(monthlyReport.overtimeHours).toFixed(0)}h` : "—", color: "#eab308" },
-          { label: "Projet top", value: loading ? "…" : topProject?.projectName?.slice(0, 12) ?? "—", color: "#22c55e" },
-        ].map(({ label, value, color }) => (
+          { label: "Total heures loggées", value: loading ? "…" : `${Number(totalHours).toFixed(0)}h`, sub: `${adminStats?.totalTimesheets ?? 0} feuilles`, color: ACCENT },
+          { label: "Employés actifs", value: loading ? "…" : String(adminStats?.uniqueEmployees ?? 0), sub: "ce mois", color: "#3b82f6" },
+          { label: "Heures supp.", value: loading ? "…" : `${Number(overtimeHours).toFixed(0)}h`, sub: "au-delà 40h/sem", color: "#eab308" },
+          { label: "Projet top", value: loading ? "…" : topProject?.projectName?.slice(0, 14) ?? "—", sub: topProject ? `${Number(topProject.totalHours).toFixed(0)}h` : "", color: "#22c55e" },
+        ].map(({ label, value, sub, color }) => (
           <div key={label} className="stat-card">
             <p className="stat-label">{label}</p>
             <p className="stat-value" style={{ fontSize: 22, color }}>{value}</p>
+            {sub && <p className="text-[10px] mt-1" style={{ color: "var(--text-3)" }}>{sub}</p>}
           </div>
         ))}
       </div>
 
       {/* Tabs */}
       <div className="tab-bar">
-        {[{ key: "overview", label: "Répartition par projet" }, { key: "export", label: "Export" }].map(tb => (
+        {[{ key: "overview", label: "Répartition" }, { key: "export", label: "Export & Rapport" }].map(tb => (
           <button key={tb.key} onClick={() => setTab(tb.key as any)} className={`tab ${tab === tb.key ? "active" : ""}`}>{tb.label}</button>
         ))}
       </div>
 
+      {/* ── OVERVIEW TAB ─────────────────────────────────────────────────── */}
       {tab === "overview" && (
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Bar chart */}
-          <div className="card p-5 lg:col-span-2">
-            <p className="text-sm font-semibold mb-4" style={{ color: "var(--text-1)" }}>
-              Heures par projet — {FR_MONTHS_SHORT[month - 1]} {year}
-            </p>
-            {loading ? (
-              <div className="flex items-center justify-center h-52"><Loader2 size={24} className="animate-spin" style={{ color: ACCENT }} /></div>
-            ) : chartData.length === 0 ? (
-              <div className="empty-state" style={{ height: 200 }}><p className="text-xs">Aucune donnée pour cette période</p></div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: "var(--text-2)", fontSize: 11 }} width={130} axisLine={false} tickLine={false} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="hours" name="heures" radius={[0, 6, 6, 0]} maxBarSize={14}>
-                    {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Project table */}
-          <div className="card overflow-hidden">
-            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
-              <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>Détail par projet</p>
-            </div>
-            {loading ? (
-              <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin" style={{ color: ACCENT }} /></div>
-            ) : projectTotals.length === 0 ? (
-              <div className="empty-state"><p className="text-xs">Aucune donnée</p></div>
-            ) : (
-              <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-                {projectTotals.sort((a, b) => b.totalHours - a.totalHours).map((p, i) => (
-                  <div key={p.projectId} className="flex items-center justify-between px-4 py-2.5 transition"
-                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--surface-raised)"}
-                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
-                      <span className="text-xs truncate" style={{ color: "var(--text-2)", maxWidth: 120 }}>{p.projectName}</span>
-                    </div>
-                    <span className="text-xs font-bold" style={{ color: "var(--text-1)" }}>{Number(p.totalHours ?? 0).toFixed(1)}h</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "var(--surface-raised)" }}>
-                  <span className="text-xs font-semibold" style={{ color: "var(--text-2)" }}>Total</span>
-                  <span className="text-xs font-bold" style={{ color: ACCENT }}>{totalHours.toFixed(1)}h</span>
-                </div>
+        <div className="space-y-6">
+          {/* Status breakdown bar */}
+          {adminStats && adminStats.totalTimesheets > 0 && (
+            <div className="card p-4">
+              <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-2)" }}>Statut des feuilles</p>
+              <div className="flex h-3 rounded-full overflow-hidden gap-0.5 mb-3">
+                {["APPROVED","SUBMITTED","DRAFT","REJECTED"].map(s => {
+                  const cnt = adminStats.byStatus[s] ?? 0;
+                  if (!cnt) return null;
+                  const pct = (cnt / adminStats.totalTimesheets) * 100;
+                  return <div key={s} title={`${STATUS_LABELS_FR[s]}: ${cnt}`} style={{ width: `${pct}%`, background: STATUS_COLORS[s] }} />;
+                })}
               </div>
-            )}
+              <div className="flex flex-wrap gap-x-6 gap-y-1">
+                {["APPROVED","SUBMITTED","DRAFT","REJECTED"].map(s => {
+                  const cnt = adminStats.byStatus[s] ?? 0;
+                  return (
+                    <div key={s} className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: STATUS_COLORS[s] }} />
+                      <span className="text-xs" style={{ color: "var(--text-3)" }}>{STATUS_LABELS_FR[s]}: <span style={{ color: "var(--text-1)", fontWeight: 600 }}>{cnt}</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Bar chart */}
+            <div className="card p-5 lg:col-span-2">
+              <p className="text-sm font-semibold mb-4" style={{ color: "var(--text-1)" }}>
+                Heures par projet — {FR_MONTHS_SHORT[month - 1]} {year}
+              </p>
+              {loading ? (
+                <div className="flex items-center justify-center h-52"><Loader2 size={24} className="animate-spin" style={{ color: ACCENT }} /></div>
+              ) : chartData.length === 0 ? (
+                <div className="empty-state" style={{ height: 200 }}><p className="text-xs">Aucune donnée pour cette période</p></div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: "var(--text-3)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "var(--text-2)", fontSize: 11 }} width={130} axisLine={false} tickLine={false} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="hours" name="heures" radius={[0, 6, 6, 0]} maxBarSize={14}>
+                      {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Project table */}
+            <div className="card overflow-hidden">
+              <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>Détail par projet</p>
+              </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin" style={{ color: ACCENT }} /></div>
+              ) : projectTotals.length === 0 ? (
+                <div className="empty-state"><p className="text-xs">Aucune donnée</p></div>
+              ) : (
+                <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                  {[...projectTotals].sort((a, b) => Number(b.totalHours) - Number(a.totalHours)).map((p, i) => {
+                    const pct = totalHours > 0 ? Math.round((Number(p.totalHours) / totalHours) * 100) : 0;
+                    return (
+                      <div key={p.projectId} className="px-4 py-2.5 transition"
+                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--surface-raised)"}
+                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                            <span className="text-xs truncate" style={{ color: "var(--text-2)", maxWidth: 100 }}>{p.projectName}</span>
+                          </div>
+                          <span className="text-xs font-bold flex-shrink-0 ml-2" style={{ color: "var(--text-1)" }}>{Number(p.totalHours ?? 0).toFixed(1)}h</span>
+                        </div>
+                        <div className="h-1 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }} />
+                        </div>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--text-3)" }}>
+                          {pct}% du total
+                          {p.contributorsCount !== undefined && ` · ${p.contributorsCount} contrib.`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "var(--surface-raised)" }}>
+                    <span className="text-xs font-semibold" style={{ color: "var(--text-2)" }}>Total</span>
+                    <span className="text-xs font-bold" style={{ color: ACCENT }}>{Number(totalHours).toFixed(1)}h</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
+      {/* ── EXPORT TAB ───────────────────────────────────────────────────── */}
       {tab === "export" && (
-        <div className="card p-6 max-w-lg">
-          <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-1)" }}>Exporter les données</p>
-          <p className="text-xs mb-5" style={{ color: "var(--text-3)" }}>
-            Export des feuilles de temps pour {FR_MONTHS[month - 1]} {year}
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => handleExport("excel")} disabled={!!exporting} className="btn-primary" style={{ gap: 8 }}>
-              {exporting === "excel" ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
-              Export CSV / Excel
-            </button>
-            <button onClick={() => handleExport("pdf")} disabled={!!exporting} className="btn-ghost" style={{ gap: 8 }}>
-              {exporting === "pdf" ? <Loader2 size={14} className="animate-spin" /> : <FilePdf size={14} />}
-              Export PDF
-            </button>
-          </div>
-          {monthlyReport && (
-            <div className="mt-5 space-y-2 p-4 rounded-xl" style={{ background: "var(--surface-raised)" }}>
-              <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-2)" }}>Résumé de la période</p>
-              {[
-                { label: "Feuilles soumises", value: monthlyReport.totalTimesheets },
-                { label: "Heures totales", value: `${Number(monthlyReport.totalHours).toFixed(1)}h` },
-                { label: "Heures supplémentaires", value: `${Number(monthlyReport.overtimeHours).toFixed(1)}h` },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between text-xs">
-                  <span style={{ color: "var(--text-3)" }}>{label}</span>
-                  <span className="font-semibold" style={{ color: "var(--text-1)" }}>{value}</span>
+        <div className="space-y-6">
+          {/* Export actions card */}
+          <div className="card p-6">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
+                  Exporter le rapport — {FR_MONTHS[month - 1]} {year}
+                </p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-3)" }}>
+                  Le rapport comprend : résumé global, répartition par projet, détail par employé et liste des entrées.
+                </p>
+              </div>
+              {exportSuccess && (
+                <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                     style={{ background: "rgba(34,197,94,0.12)", color: "#4ade80" }}>
+                  <CheckCircle size={13} />
+                  {exportSuccess === "excel" ? "CSV téléchargé" : "PDF téléchargé"}
                 </div>
-              ))}
+              )}
             </div>
-          )}
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              {/* CSV Card */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(34,197,94,0.12)" }}>
+                    <FileSpreadsheet size={20} style={{ color: "#22c55e" }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>CSV / Excel</p>
+                    <p className="text-xs" style={{ color: "var(--text-3)" }}>Format tabulaire multi-sections</p>
+                  </div>
+                </div>
+                <ul className="space-y-1">
+                  {["Résumé global + KPIs","Répartition par projet","Détail par employé","Liste complète des entrées"].map(item => (
+                    <li key={item} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-3)" }}>
+                      <CheckCircle size={11} style={{ color: "#22c55e", flexShrink: 0 }} />{item}
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={() => handleExport("excel")} disabled={!!exporting || loading}
+                  className="w-full btn-primary" style={{ justifyContent: "center" }}>
+                  {exporting === "excel" ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Télécharger CSV
+                </button>
+              </div>
+
+              {/* PDF Card */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(249,115,22,0.12)" }}>
+                    <FilePdf size={20} style={{ color: ACCENT }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>PDF Professionnel</p>
+                    <p className="text-xs" style={{ color: "var(--text-3)" }}>Rapport mis en page, prêt à imprimer</p>
+                  </div>
+                </div>
+                <ul className="space-y-1">
+                  {["En-tête avec titre et période","Résumé exécutif visuel","Tableau des projets avec % total","Tableau des employés avec statuts"].map(item => (
+                    <li key={item} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-3)" }}>
+                      <CheckCircle size={11} style={{ color: ACCENT, flexShrink: 0 }} />{item}
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={() => handleExport("pdf")} disabled={!!exporting || loading}
+                  className="btn-ghost w-full" style={{ justifyContent: "center" }}>
+                  {exporting === "pdf" ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Télécharger PDF
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Data preview */}
+          <div className="card overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>Aperçu des données</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>
+                  Ce que contiendra le rapport exporté
+                </p>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 size={24} className="animate-spin" style={{ color: ACCENT }} />
+              </div>
+            ) : !adminStats ? (
+              <div className="empty-state">
+                <p className="text-xs">Aucune donnée disponible pour cette période</p>
+              </div>
+            ) : (
+              <div>
+                {/* Summary section */}
+                <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-3)" }}>
+                    Résumé global
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: "Feuilles", value: adminStats.totalTimesheets, color: "var(--text-1)" },
+                      { label: "Employés", value: adminStats.uniqueEmployees, color: "#3b82f6" },
+                      { label: "Heures totales", value: `${Number(adminStats.totalHours).toFixed(1)}h`, color: ACCENT },
+                      { label: "Heures supp.", value: `${Number(adminStats.overtimeHours).toFixed(1)}h`, color: "#eab308" },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="rounded-lg p-3 text-center" style={{ background: "var(--surface-raised)" }}>
+                        <p className="text-[10px] mb-1" style={{ color: "var(--text-3)" }}>{label}</p>
+                        <p className="text-base font-bold" style={{ color }}>{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Project preview table */}
+                <div className="px-5 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-3)" }}>
+                    Répartition par projet ({adminStats.projectCount} projets)
+                  </p>
+                  <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                    <div className="grid text-[10px] font-semibold uppercase tracking-wide px-4 py-2"
+                         style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr", borderBottom: "1px solid var(--border)", color: "var(--text-3)", background: "var(--surface-raised)" }}>
+                      <span>Projet</span>
+                      <span className="text-center">Contributeurs</span>
+                      <span className="text-right">Heures</span>
+                      <span className="text-right">% Total</span>
+                    </div>
+                    {[...projectTotals]
+                      .sort((a, b) => Number(b.totalHours) - Number(a.totalHours))
+                      .slice(0, 8)
+                      .map((p, i) => {
+                        const pct = Number(adminStats.totalHours) > 0
+                          ? ((Number(p.totalHours) / Number(adminStats.totalHours)) * 100).toFixed(1)
+                          : "0";
+                        return (
+                          <div key={p.projectId} className="grid items-center px-4 py-2.5 text-xs"
+                               style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr", borderBottom: i < Math.min(projectTotals.length, 8) - 1 ? "1px solid var(--border)" : "none" }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                              <span className="truncate" style={{ color: "var(--text-2)" }}>{p.projectName}</span>
+                            </div>
+                            <span className="text-center" style={{ color: "var(--text-3)" }}>{p.contributorsCount ?? "—"}</span>
+                            <span className="text-right font-semibold" style={{ color: "var(--text-1)" }}>{Number(p.totalHours).toFixed(1)}h</span>
+                            <span className="text-right" style={{ color: "var(--text-3)" }}>{pct}%</span>
+                          </div>
+                        );
+                      })
+                    }
+                    {projectTotals.length > 8 && (
+                      <div className="px-4 py-2 text-xs text-center" style={{ color: "var(--text-3)", background: "var(--surface-raised)" }}>
+                        +{projectTotals.length - 8} autres projets dans le rapport complet
+                      </div>
+                    )}
+                    <div className="grid px-4 py-2.5 text-xs font-bold"
+                         style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr", background: "var(--surface-raised)", borderTop: "1px solid var(--border)" }}>
+                      <span style={{ color: "var(--text-2)" }}>TOTAL</span>
+                      <span className="text-center" style={{ color: "var(--text-2)" }}>{adminStats.uniqueEmployees}</span>
+                      <span className="text-right" style={{ color: ACCENT }}>{Number(adminStats.totalHours).toFixed(1)}h</span>
+                      <span className="text-right" style={{ color: "var(--text-3)" }}>100%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

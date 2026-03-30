@@ -20,6 +20,7 @@ A full-stack HR management platform built with **Next.js 14** (frontend) and **N
    - [Project Tracking](#66-project-tracking)
    - [Performance Management](#67-performance-management)
    - [Public Holidays](#68-public-holidays)
+   - [In-App Notifications](#69-in-app-notifications)
 7. [API Reference](#7-api-reference)
 8. [Frontend Routes](#8-frontend-routes)
 9. [Design System](#9-design-system)
@@ -161,6 +162,7 @@ All accounts share the same password: **`RHpro2026!`**
 | View own evaluations | ✅ | ✅ | ✅ |
 | View salary history (all) | ✅ | ❌ | ❌ |
 | View own salary history | ✅ | ✅ | ✅ |
+| Receive in-app notifications | ✅ | ✅ | ✅ |
 
 ---
 
@@ -459,6 +461,66 @@ DRAFT (editable) → SUBMITTED → APPROVED (locked)
 
 ---
 
+### 6.9 In-App Notifications
+
+**What it does:** Real-time-style **in-app notifications** stored in PostgreSQL (`notifications` table). When collaborators take actions that concern their manager or company oversight, the right users are notified. The **top navigation bar** (all dashboard pages) loads notifications from the API, shows an **unread badge**, **polls every 60 seconds**, and supports **mark one as read** (click) and **mark all as read**.
+
+#### Who receives what
+
+| Event | Manager (direct) | Admin(s) | Collaborator (actor) |
+|---|---|---|---|
+| Leave request submitted | ✅ | ✅ | — |
+| Leave request approved / rejected | — | — | ✅ (submitter) |
+| Leave request cancelled by admin (someone else’s request) | — | — | ✅ (submitter) |
+| Timesheet submitted | ✅ | ✅ | — |
+| Timesheet approved / rejected | — | — | ✅ (owner) |
+| Assigned to a project | — | — | ✅ |
+| New performance evaluation created | — | — | ✅ (evaluated) |
+
+> **Admin broadcast:** “Admin” means every user whose role description contains `Admin` (case-insensitive). Managers are resolved via the `Collaborator.managerId` link.
+
+#### Title format (for UI)
+
+Notifications use a machine-readable prefix in `title` so the frontend can show the correct icon:
+
+| Prefix | Meaning |
+|---|---|
+| `[LEAVE_REQUEST]` | Congés / demandes |
+| `[TIMESHEET]` | Feuilles de temps |
+| `[PROJECT]` | Projets / affectation |
+| `[EVALUATION]` | Performance |
+| `[SYSTEM]` | General (fallback) |
+
+The visible title is the text **after** the `]` and space (e.g. `[TIMESHEET] Nouvelle feuille…`).
+
+#### Scenarios
+
+**See notifications as a manager**
+1. Log in as a manager.
+2. Have a collaborator submit a leave request or timesheet (or use the API).
+3. Open the **bell** in the top-right: new items appear with type-colored icons.
+4. Click an item to mark it read, or **Tout lire** for all.
+
+**See notifications as admin**
+1. Log in as admin.
+2. Trigger a team-wide event (e.g. collaborator submits leave or timesheet).
+3. Admins receive the same class of “oversight” notifications (leave/timesheet submissions).
+
+**Verify via API**
+1. `GET /notifications/user/<your_user_uuid>` — list (newest first, up to 30).
+2. `PATCH /notifications/<notification_uuid>/seen` — mark one read.
+3. `PATCH /notifications/user/<your_user_uuid>/read-all` — mark all read.
+
+#### Frontend configuration
+
+Endpoints are defined in `FrontEnd/src/utils/api-config.ts` under `endpoints.notifications` (`byUser`, `unreadCount`, `markSeen`, `markAllSeen`). The navbar uses **named import** `{ apiClient }` from `@/utils/api-client`.
+
+#### Legacy routes (still present)
+
+For backward compatibility, `GET /requests/notifications/:userId` and `PATCH /requests/notifications/:id/seen` still exist. **Prefer** `/notifications/...` for new integrations.
+
+---
+
 ## 7. API Reference
 
 Base URL: `http://localhost:3001`
@@ -536,8 +598,8 @@ curl -X POST http://localhost:3001/users/add \
 | PATCH | `/requests/balance/:userId` | Admin | Update leave balance |
 | GET | `/requests/balance?year=` | Admin | All employees' balances |
 | GET | `/requests/stats?year=` | Admin | Annual leave stats |
-| GET | `/requests/notifications/:userId` | Any | User notifications |
-| PATCH | `/requests/notifications/:id/seen` | Any | Mark notification read |
+
+> **Notifications:** Use **§7.8** (`/notifications` base path) for listing and marking read. Legacy `GET/PATCH /requests/notifications/...` routes remain for compatibility.
 
 **Example — Create and submit a leave request:**
 ```bash
@@ -581,6 +643,7 @@ curl -X POST http://localhost:3001/requests/<request_uuid>/approve \
 | GET | `/timesheets/reports/user/:userId/weekly?weekStartDate=` | Any | Weekly report for a user |
 | GET | `/timesheets/reports/user/:userId/monthly?year=&month=` | Any | Monthly report for a user |
 | GET | `/timesheets/reports/projects/totals?year=&month=` | Any | Hours by project for a period |
+| GET | `/timesheets/reports/admin/monthly?year=&month=` | Admin | Company-wide monthly stats (KPIs, status breakdown, project totals) |
 | GET | `/timesheets/export/excel?year=&month=` | Admin | Download CSV export |
 | GET | `/timesheets/export/pdf?year=&month=` | Admin | Download PDF export |
 | GET | `/timesheets/:id` | Any | Get a specific timesheet |
@@ -707,6 +770,42 @@ curl -X POST http://localhost:3001/holidays \
 
 ---
 
+### 7.8 Notifications
+
+Base path: **`/notifications`**. Central API for **in-app** notifications (`NotificationChannel.IN_APP`). All routes require a valid Bearer token (`RolesGuard` — any authenticated role).
+
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/notifications/user/:userId` | Any | Last **30** notifications for that user (newest first) |
+| GET | `/notifications/user/:userId/count` | Any | `{ count }` — number of notifications with `status: UNSEEN` |
+| PATCH | `/notifications/:id/seen` | Any | Mark one notification as `SEEN` |
+| PATCH | `/notifications/user/:userId/read-all` | Any | Mark **all** of that user’s notifications as `SEEN` |
+
+**Response shape (list item):** `id`, `recipientId`, `channel`, `title`, `message`, `status` (`SEEN` \| `UNSEEN`), `createdAt`, `updatedAt`.
+
+**Example — List and mark read:**
+```bash
+# List
+curl -s http://localhost:3001/notifications/user/<user_uuid> \
+  -H "Authorization: Bearer <token>" | jq .
+
+# Unread count
+curl -s http://localhost:3001/notifications/user/<user_uuid>/count \
+  -H "Authorization: Bearer <token>"
+
+# Mark one seen
+curl -X PATCH http://localhost:3001/notifications/<notification_uuid>/seen \
+  -H "Authorization: Bearer <token>"
+
+# Mark all seen
+curl -X PATCH http://localhost:3001/notifications/user/<user_uuid>/read-all \
+  -H "Authorization: Bearer <token>"
+```
+
+**Backend wiring:** `NotificationsService` is called from `requests`, `timesheets`, `projects`, and `evaluations` services when the events in [§6.9](#69-in-app-notifications) occur.
+
+---
+
 ## 8. Frontend Routes
 
 | Route | Access | Description |
@@ -721,6 +820,13 @@ curl -X POST http://localhost:3001/holidays \
 | `/performance` | All roles | Evaluations & salary history |
 | `/approvals` | Manager, Admin | Approval hub (leaves + timesheets) |
 | `/profile` | All roles | Employee dossier (Mon Dossier) |
+
+### Global UI (dashboard layout)
+
+| Area | Description |
+|---|---|
+| **Top bar** | Role badge, **notifications** (bell: live list, 60s refresh, unread badge, mark read / mark all), user block, logout. Page titles live **only** in the page body (not duplicated in the navbar). |
+| **Sidebar** | Module navigation (includes **Mon Dossier**; manager **Approvals** link). |
 
 ### Dashboard per role
 
@@ -800,4 +906,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJ..."
 
 ---
 
-*Last updated: March 2026 — RHpro v1.0*
+*Last updated: March 2026 — RHpro v1.0 (in-app notifications module, `/notifications` API, navbar integration, admin timesheet monthly stats endpoint documented)*
