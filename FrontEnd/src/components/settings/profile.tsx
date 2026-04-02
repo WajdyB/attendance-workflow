@@ -24,6 +24,8 @@ import {
   Pencil,
   Save,
   X,
+  Camera,
+  Trash2,
 } from "lucide-react";
 import DocumentsPanel from "./documents";
 
@@ -54,6 +56,7 @@ type DossierProfile = {
   id: string;
   firstName: string;
   lastName: string;
+  pictureUrl?: string | null;
   personalEmail?: string | null;
   workEmail?: string | null;
   phone?: string | null;
@@ -170,6 +173,32 @@ const Avatar = ({ firstName, lastName, size = "md" }: { firstName: string; lastN
   );
 };
 
+const ProfileAvatar = ({
+  firstName,
+  lastName,
+  pictureUrl,
+  size = "md",
+}: {
+  firstName: string;
+  lastName: string;
+  pictureUrl?: string | null;
+  size?: "sm" | "md" | "lg";
+}) => {
+  const s = size === "lg" ? "w-20 h-20 text-2xl" : size === "md" ? "w-10 h-10 text-sm" : "w-8 h-8 text-xs";
+  const src = pictureUrl?.trim();
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={`${s} rounded-full object-cover flex-shrink-0`}
+        style={{ border: "1px solid var(--border)" }}
+      />
+    );
+  }
+  return <Avatar firstName={firstName} lastName={lastName} size={size} />;
+};
+
 const InfoRow = ({ label, value, icon }: { label: string; value?: string | null; icon?: React.ReactNode }) => (
   <div className="flex items-center justify-between py-3" style={{ borderBottom: "1px solid var(--border)" }}>
     <div className="flex items-center gap-2">
@@ -243,6 +272,8 @@ export default function EmployeeProfile() {
   const [dossierEditForm, setDossierEditForm] = useState<DossierEditFormState | null>(null);
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalSaveError, setPersonalSaveError] = useState<string | null>(null);
+  const [pictureUploading, setPictureUploading] = useState(false);
+  const [pictureError, setPictureError] = useState<string | null>(null);
 
   const isAdmin = (databaseUser?.role?.description || "")
     .toLowerCase()
@@ -292,6 +323,50 @@ export default function EmployeeProfile() {
   const { hierarchy, contracts } = dossier;
   const latestContract = contracts.latest;
 
+  const refreshDossierAndAuthPicture = async () => {
+    if (!databaseUser?.id) return;
+    const fresh = await apiClient.get<DossierResponse>(
+      apiConfig.endpoints.users.dossier(databaseUser.id),
+    );
+    setDossier(fresh);
+    updateUser({ pictureUrl: fresh.profile.pictureUrl ?? null });
+  };
+
+  const onProfilePictureFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !databaseUser?.id) return;
+    setPictureUploading(true);
+    setPictureError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await apiClient.post<{ user?: { pictureUrl?: string | null } }>(
+        apiConfig.endpoints.users.uploadPicture(databaseUser.id),
+        fd,
+      );
+      await refreshDossierAndAuthPicture();
+    } catch {
+      setPictureError(fr ? "Impossible d'envoyer la photo." : "Could not upload photo.");
+    } finally {
+      setPictureUploading(false);
+    }
+  };
+
+  const removeProfilePicture = async () => {
+    if (!databaseUser?.id || !user.pictureUrl) return;
+    setPictureUploading(true);
+    setPictureError(null);
+    try {
+      await apiClient.delete(apiConfig.endpoints.users.removePicture(databaseUser.id));
+      await refreshDossierAndAuthPicture();
+    } catch {
+      setPictureError(fr ? "Impossible de supprimer la photo." : "Could not remove photo.");
+    } finally {
+      setPictureUploading(false);
+    }
+  };
+
   const savePersonalDossier = async () => {
     if (!databaseUser?.id || !dossierEditForm) return;
     setSavingPersonal(true);
@@ -332,6 +407,7 @@ export default function EmployeeProfile() {
         jobTitle: p.jobTitle ?? "",
         bankName: p.bankName ?? "",
         cnssNumber: p.cnssNumber ?? "",
+        pictureUrl: p.pictureUrl ?? null,
       });
       setEditingPersonal(false);
       setDossierEditForm(null);
@@ -381,7 +457,38 @@ export default function EmployeeProfile() {
       {/* ── Profile header ── */}
       <div className="p-6 pb-0" style={{ borderBottom: "1px solid var(--border)" }}>
         <div className="flex items-start gap-5 pb-6">
-          <Avatar firstName={user.firstName} lastName={user.lastName} size="lg" />
+          <div className="relative flex-shrink-0">
+            <ProfileAvatar
+              firstName={user.firstName}
+              lastName={user.lastName}
+              pictureUrl={user.pictureUrl}
+              size="lg"
+            />
+            <label
+              className={`absolute -bottom-0.5 -right-0.5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 shadow-md transition hover:opacity-90 ${
+                pictureUploading ? "pointer-events-none opacity-70" : ""
+              }`}
+              style={{
+                background: "var(--surface)",
+                borderColor: "var(--border)",
+                color: "var(--accent)",
+              }}
+              title={fr ? "Changer la photo de profil" : "Change profile photo"}
+            >
+              {pictureUploading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Camera size={16} />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={pictureUploading}
+                onChange={onProfilePictureFile}
+              />
+            </label>
+          </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold" style={{ color: "var(--text-1)" }}>
               {user.firstName} {user.lastName}
@@ -389,6 +496,23 @@ export default function EmployeeProfile() {
             <p className="text-sm mt-0.5" style={{ color: "var(--text-2)" }}>
               {user.jobTitle || (fr ? "Poste non renseigné" : "No job title")}
             </p>
+            {pictureError && (
+              <p className="mt-2 text-xs" style={{ color: "#ef4444" }}>
+                {pictureError}
+              </p>
+            )}
+            {user.pictureUrl && (
+              <button
+                type="button"
+                onClick={() => void removeProfilePicture()}
+                disabled={pictureUploading}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition hover:opacity-80 disabled:opacity-50"
+                style={{ color: "var(--text-3)" }}
+              >
+                <Trash2 size={12} />
+                {fr ? "Supprimer la photo" : "Remove photo"}
+              </button>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               {user.role && (
                 <span
@@ -459,8 +583,8 @@ export default function EmployeeProfile() {
             {!isAdmin && (
               <p className="text-xs rounded-lg px-3 py-2" style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
                 {fr
-                  ? "Votre dossier est consultable uniquement. Seuls les administrateurs peuvent modifier leur dossier depuis cette page."
-                  : "Your dossier is read-only here. Only administrators can edit their own dossier on this page."}
+                  ? "Les informations du dossier ci-dessous sont en lecture seule. Vous pouvez toutefois modifier votre photo de profil depuis l’en-tête ci-dessus. Seuls les administrateurs peuvent modifier les champs du dossier sur cette page."
+                  : "The dossier fields below are read-only. You can still change your profile photo using the camera control on your picture above. Only administrators can edit dossier fields on this page."}
               </p>
             )}
             {isAdmin && !editingPersonal && (

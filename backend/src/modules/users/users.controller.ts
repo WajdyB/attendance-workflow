@@ -15,7 +15,10 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UsersService, RequestingUser } from './users.service';
+import {
+  UsersService,
+  type RequestingUser,
+} from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserPasswordDto } from './dto/update-user-password.dto';
@@ -84,13 +87,19 @@ export class UsersController {
   async uploadPicture(
     @Param('id', new ParseUUIDPipe()) id: string,
     @UploadedFile() file: Express.Multer.File,
+    @Req() req: RequestWithRequestingUser,
   ) {
-    return this.usersService.uploadPicture(id, file);
+    const requester = req.user as RequestingUser | undefined;
+    return this.usersService.uploadPicture(id, file, requester);
   }
 
   @Delete(':id/picture')
-  async removePicture(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.usersService.removePicture(id);
+  async removePicture(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: RequestWithRequestingUser,
+  ) {
+    const requester = req.user as RequestingUser | undefined;
+    return this.usersService.removePicture(id, requester);
   }
 
   @Post(':collaboratorId/manager/:managerId')

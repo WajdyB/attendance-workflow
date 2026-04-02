@@ -52,6 +52,9 @@ interface DatabaseUser {
   createdAt: string;
   updatedAt: string;
   role: Role;
+  /** Profile photo URL from API (`picture_url`); shown in header and profile */
+  pictureUrl?: string | null;
+  /** Legacy alias; prefer `pictureUrl` */
   avatarUrl?: string;
   departmentId?: string | null;
   department?: Department | null;

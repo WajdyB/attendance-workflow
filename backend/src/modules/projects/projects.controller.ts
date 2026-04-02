@@ -19,6 +19,9 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { RequireRoles } from '../../common/decorator/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { ProjectStatus } from '@prisma/client';
+import { CurrentUser } from '../../common/decorator/current-user.decorator';
+
+type AuthUserPayload = { id: string; roleName?: string };
 
 @Controller('projects')
 @UseGuards(RolesGuard)
@@ -70,7 +73,7 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  @RequireRoles(Role.ADMIN, Role.MANAGER)
+  @RequireRoles(Role.ADMIN)
   async update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: Partial<CreateProjectDto>,
@@ -97,8 +100,12 @@ export class ProjectsController {
   async assignMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: AssignMemberDto,
+    @CurrentUser() user: AuthUserPayload,
   ) {
-    return this.projectsService.assignMember(id, dto);
+    return this.projectsService.assignMember(id, dto, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
   }
 
   @Delete(':id/team/:collaboratorId')
@@ -106,8 +113,12 @@ export class ProjectsController {
   async removeMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('collaboratorId', new ParseUUIDPipe()) collaboratorId: string,
+    @CurrentUser() user: AuthUserPayload,
   ) {
-    return this.projectsService.removeMember(id, collaboratorId);
+    return this.projectsService.removeMember(id, collaboratorId, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
   }
 
   // ─── Reports ─────────────────────────────────────────────────────────────────

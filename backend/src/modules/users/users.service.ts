@@ -18,6 +18,16 @@ export type RequestingUser = {
   role?: { description: string } | null;
 };
 
+const PROFILE_PICTURES_BUCKET = 'profile-pictures';
+
+/** Must stay in sync with Supabase bucket `allowedMimeTypes` */
+const PROFILE_PICTURE_ALLOWED_MIME_TYPES: string[] = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+];
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -518,11 +528,38 @@ export class UsersService {
     }
   }
 
-  async uploadPicture(userId: string, file?: Express.Multer.File) {
+  private assertCanModifyProfilePicture(
+    userId: string,
+    requester?: RequestingUser,
+  ) {
+    if (!requester?.id) {
+      return;
+    }
+    const isSelf = userId === requester.id;
+    const roleName = requester.role?.description ?? '';
+    const isAdmin = roleName === Role.ADMIN;
+    const isManager = roleName === Role.MANAGER;
+    if (isSelf) {
+      return;
+    }
+    if (!isAdmin && !isManager) {
+      throw new ForbiddenException(
+        "You cannot update this user's profile picture.",
+      );
+    }
+  }
+
+  async uploadPicture(
+    userId: string,
+    file?: Express.Multer.File,
+    requester?: RequestingUser,
+  ) {
     try {
       if (!file) {
         throw new BadRequestException('Picture file is required');
       }
+
+      this.assertCanModifyProfilePicture(userId, requester);
 
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -531,6 +568,12 @@ export class UsersService {
 
       if (!user) {
         throw new NotFoundException('User not found');
+      }
+
+      if (!PROFILE_PICTURE_ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        throw new BadRequestException(
+          `Unsupported image type (${file.mimetype}). Allowed: JPEG, PNG, WebP, AVIF.`,
+        );
       }
 
       await this.ensureProfilePicturesBucket();
@@ -542,7 +585,7 @@ export class UsersService {
 
       const { error: uploadError } =
         await this.supabaseService.adminClient.storage
-          .from('profile-pictures')
+          .from(PROFILE_PICTURES_BUCKET)
           .upload(fileName, file.buffer, {
             contentType: file.mimetype,
             upsert: true,
@@ -586,8 +629,10 @@ export class UsersService {
     }
   }
 
-  async removePicture(userId: string) {
+  async removePicture(userId: string, requester?: RequestingUser) {
     try {
+      this.assertCanModifyProfilePicture(userId, requester);
+
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, pictureUrl: true },
@@ -601,7 +646,7 @@ export class UsersService {
         const storagePath = this.extractProfilePicturePath(user.pictureUrl);
         if (storagePath) {
           const { error } = await this.supabaseService.adminClient.storage
-            .from('profile-pictures')
+            .from(PROFILE_PICTURES_BUCKET)
             .remove([storagePath]);
 
           if (error) {
@@ -643,18 +688,31 @@ export class UsersService {
       const { data: buckets } =
         await this.supabaseService.adminClient.storage.listBuckets();
       const bucketExists = buckets?.some(
-        (bucket) => bucket.name === 'profile-pictures',
+        (bucket) => bucket.name === PROFILE_PICTURES_BUCKET,
       );
+
+      const bucketConfig = {
+        public: true,
+        fileSizeLimit: 5242880,
+        allowedMimeTypes: [...PROFILE_PICTURE_ALLOWED_MIME_TYPES],
+      };
 
       if (!bucketExists) {
         await this.supabaseService.adminClient.storage.createBucket(
-          'profile-pictures',
-          {
-            public: true,
-            fileSizeLimit: 5242880,
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-          },
+          PROFILE_PICTURES_BUCKET,
+          bucketConfig,
         );
+      } else {
+        const { error: updateError } =
+          await this.supabaseService.adminClient.storage.updateBucket(
+            PROFILE_PICTURES_BUCKET,
+            bucketConfig,
+          );
+        if (updateError) {
+          this.logger.warn(
+            `Could not sync ${PROFILE_PICTURES_BUCKET} bucket settings: ${updateError.message}`,
+          );
+        }
       }
     } catch (error) {
       const errorMessage =

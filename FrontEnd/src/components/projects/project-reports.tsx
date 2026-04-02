@@ -201,7 +201,7 @@ export default function ProjectReports() {
                               {language === "fr" ? meta.fr : meta.en}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right text-stone-600">{(p as any).memberCount ?? p.assignments.length}</td>
+                          <td className="px-4 py-3 text-right text-stone-600">{(p as any).memberCount ?? p.assignments?.length ?? 0}</td>
                           <td className="px-4 py-3 text-right font-semibold text-stone-800">{ph}h</td>
                           <td className="px-4 py-3 text-right text-stone-500">{bh ? `${bh}h` : "—"}</td>
                           <td className="px-4 py-3 text-right">

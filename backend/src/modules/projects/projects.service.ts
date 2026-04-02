@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProjectStatus, Prisma } from '@prisma/client';
@@ -10,6 +11,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { AssignMemberDto } from './dto/assign-member.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { NotificationsService, buildTitle } from '../notifications/notifications.service';
+import { Role } from '../../common/enums/role.enum';
 
 const PROJECT_INCLUDE = {
   lead: {
@@ -153,6 +155,43 @@ export class ProjectsService {
     }));
   }
 
+  /**
+   * Same scope as {@link findByManager}: lead OR at least one supervised
+   * collaborator is actively assigned to the project.
+   */
+  async assertManagerCanManageTeam(managerUserId: string, projectId: string) {
+    const manager = await this.prisma.manager.findUnique({
+      where: { id: managerUserId },
+      include: { collaborators: { select: { id: true } } },
+    });
+    if (!manager) {
+      throw new ForbiddenException('Manager profile not found');
+    }
+    const superviseeIds = manager.collaborators.map((c) => c.id);
+    const allowed = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { leadId: managerUserId },
+          {
+            assignments: {
+              some: {
+                collaboratorId: { in: superviseeIds },
+                unassignedAt: null,
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!allowed) {
+      throw new ForbiddenException(
+        'You can only manage team members on projects assigned to you',
+      );
+    }
+  }
+
   async findByUser(userId: string) {
     const collaborator = await this.prisma.collaborator.findUnique({
       where: { id: userId },
@@ -263,7 +302,15 @@ export class ProjectsService {
     });
   }
 
-  async assignMember(projectId: string, dto: AssignMemberDto) {
+  async assignMember(
+    projectId: string,
+    dto: AssignMemberDto,
+    actor?: { userId: string; roleName?: string },
+  ) {
+    if (actor?.roleName === Role.MANAGER) {
+      await this.assertManagerCanManageTeam(actor.userId, projectId);
+    }
+
     const project = await this.findOne(projectId);
 
     const collaborator = await this.prisma.collaborator.findUnique({
@@ -315,7 +362,15 @@ export class ProjectsService {
     return assignment;
   }
 
-  async removeMember(projectId: string, collaboratorId: string) {
+  async removeMember(
+    projectId: string,
+    collaboratorId: string,
+    actor?: { userId: string; roleName?: string },
+  ) {
+    if (actor?.roleName === Role.MANAGER) {
+      await this.assertManagerCanManageTeam(actor.userId, projectId);
+    }
+
     const assignment = await this.prisma.projectAssignment.findFirst({
       where: { projectId, collaboratorId, unassignedAt: null },
     });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/utils/api-client";
 import apiConfig from "@/utils/api-config";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { Camera, Save, X, Trash2 } from "lucide-react";
 import ConfirmModal from "@/components/ConfirmModal";
 import { AppSelect } from "@/components/ui/app-select";
@@ -154,6 +155,7 @@ export default function EmployeeDetail({
 }: EmployeeDetailProps) {
   const { language } = useLanguage();
   const router = useRouter();
+  const { databaseUser, updateUser } = useAuth();
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -489,6 +491,9 @@ export default function EmployeeDetail({
           pictureUrl: response.user?.pictureUrl || "",
         }));
       }
+      if (databaseUser?.id === employeeId) {
+        updateUser({ pictureUrl: null });
+      }
       setSuccess(
         language === "fr"
           ? "Photo supprimée avec succès."
@@ -648,6 +653,9 @@ export default function EmployeeDetail({
         );
         if (pictureResponse?.user?.pictureUrl) {
           setPreviewUrl(pictureResponse.user.pictureUrl);
+          if (databaseUser?.id === resolvedEmployeeId) {
+            updateUser({ pictureUrl: pictureResponse.user.pictureUrl });
+          }
         }
       }
 

@@ -37,7 +37,8 @@ export interface Project {
   budgetAmount?: number;
   leadId?: string;
   lead?: ProjectLead;
-  assignments: ProjectMember[];
+  /** Omitted on some list payloads; detail fetch includes full team. */
+  assignments?: ProjectMember[];
   totalHoursLogged?: number;
   budgetHoursUsedPct?: number;
   _count?: { timesheetEntries: number; assignments: number };

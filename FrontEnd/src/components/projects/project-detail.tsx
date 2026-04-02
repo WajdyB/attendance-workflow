@@ -49,6 +49,23 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "team" | "hours">("overview");
 
+  // List payloads (e.g. collaborator) may omit `assignments`; load full project for detail.
+  useEffect(() => {
+    let cancelled = false;
+    setProject(initial);
+    void (async () => {
+      try {
+        const fresh = await apiClient.get<Project>(apiConfig.endpoints.projects.byId(initial.id));
+        if (!cancelled) setProject(fresh);
+      } catch {
+        /* keep initial payload */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initial.id]);
+
   useEffect(() => {
     const fetchHours = async () => {
       try {
@@ -127,6 +144,7 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
   };
 
   const meta = STATUS_META[project.status];
+  const assignments = project.assignments ?? [];
   const totalHoursLogged = hoursReport?.totalHours ?? project.totalHoursLogged ?? 0;
   const usedPct =
     project.budgetHours
@@ -178,7 +196,7 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
           )}
         </div>
 
-        {(isAdmin || isManager) && onEdit && (
+        {isAdmin && onEdit && (
           <button
             onClick={onEdit}
             className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100 cursor-pointer"
@@ -254,7 +272,7 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
             </p>
             <div className="flex items-center gap-2">
               <Users size={20} className="text-orange-500" />
-              <span className="text-2xl font-bold text-stone-800">{project.assignments.length}</span>
+              <span className="text-2xl font-bold text-stone-800">{assignments.length}</span>
             </div>
           </div>
 
@@ -382,7 +400,7 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
 
           {/* Member list */}
           <div className="rounded-xl border border-orange-100/20 bg-white shadow-sm overflow-hidden">
-            {project.assignments.length === 0 ? (
+            {assignments.length === 0 ? (
               <div className="py-10 text-center text-stone-400">
                 <Users size={32} className="mx-auto mb-2 opacity-30" />
                 <p className="text-sm">{t("Aucun membre assigné", "No members assigned")}</p>
@@ -399,7 +417,7 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
-                  {project.assignments.map((member) => (
+                  {assignments.map((member) => (
                     <tr key={member.id} className="hover:bg-stone-50/50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

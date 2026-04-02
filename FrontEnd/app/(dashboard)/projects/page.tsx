@@ -41,11 +41,11 @@ export default function ProjectsPage() {
   const fetchProjects = useCallback(async () => {
     setLoading(true);
     try {
-      if (isAdmin || isManager) {
+      if (isAdmin) {
         const data = await apiClient.get<Project[]>(apiConfig.endpoints.projects.all());
         setProjects(data);
       } else {
-        // Collaborator: only their assigned projects
+        // Manager / collaborator: scoped list (manager → lead or supervised team on project)
         const data = await apiClient.get<Project[]>(
           apiConfig.endpoints.projects.byUser(databaseUser!.id)
         );
@@ -56,16 +56,16 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, isManager, databaseUser]);
+  }, [isAdmin, databaseUser]);
 
   useEffect(() => {
     if (!databaseUser) return;
     fetchProjects();
   }, [databaseUser, fetchProjects]);
 
-  // Fetch users for the lead picker (admin/manager only)
+  // Fetch users for the project lead picker (create/edit — admin only)
   useEffect(() => {
-    if (!isAdmin && !isManager) return;
+    if (!isAdmin) return;
     const fetchUsers = async () => {
       try {
         const data = await apiClient.get<{ data: UserOption[] } | UserOption[]>(
@@ -82,7 +82,7 @@ export default function ProjectsPage() {
       }
     };
     fetchUsers();
-  }, [isAdmin, isManager]);
+  }, [isAdmin]);
 
   const handleProjectCreated = (project: Project) => {
     setProjects((prev) => {
@@ -191,7 +191,7 @@ export default function ProjectsPage() {
           isManager={isManager}
           onBack={handleBack}
           onEdit={
-            isAdmin || isManager
+            isAdmin
               ? () => {
                   setEditProject(selectedProject);
                   setShowForm(true);
@@ -216,10 +216,14 @@ export default function ProjectsPage() {
         <ProjectList
           projects={projects}
           isAdmin={isAdmin}
-          onEdit={(p) => {
-            setEditProject(p);
-            setShowForm(true);
-          }}
+          onEdit={
+            isAdmin
+              ? (p) => {
+                  setEditProject(p);
+                  setShowForm(true);
+                }
+              : undefined
+          }
           onDelete={handleDelete}
           onSelect={handleSelect}
         />
