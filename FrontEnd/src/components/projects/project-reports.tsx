@@ -6,6 +6,7 @@ import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
 import { Project, ResourceAllocation, STATUS_META } from "./types";
 import { useLanguage } from "@/context/LanguageContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 export default function ProjectReports() {
   const { language } = useLanguage();
@@ -85,25 +86,27 @@ export default function ProjectReports() {
           </button>
         </div>
 
-        <select
+        <AppSelect<number>
+          id="project-reports-month"
           value={month}
-          onChange={(e) => setMonth(Number(e.target.value))}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-400"
-        >
-          {MONTHS.map((m, i) => (
-            <option key={i + 1} value={i + 1}>{m}</option>
-          ))}
-        </select>
+          onChange={setMonth}
+          options={MONTHS.map((m, i) => ({ value: i + 1, label: m }))}
+          ariaLabel={t("Mois", "Month")}
+          tone="default"
+          triggerClassName="min-w-[9rem]"
+        />
 
-        <select
+        <AppSelect<number>
+          id="project-reports-year"
           value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-400"
-        >
-          {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+          onChange={setYear}
+          options={[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(
+            (y) => ({ value: y, label: String(y) }),
+          )}
+          ariaLabel={t("Année", "Year")}
+          tone="default"
+          triggerClassName="min-w-[5rem]"
+        />
       </div>
 
       {loading ? (

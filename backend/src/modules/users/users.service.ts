@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,6 +10,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Role } from '../../common/enums/role.enum';
+
+/** JWT + DB user attached by RolesGuard */
+export type RequestingUser = {
+  id: string;
+  role?: { description: string } | null;
+};
 
 @Injectable()
 export class UsersService {
@@ -268,7 +276,11 @@ export class UsersService {
     }
   }
 
-  async updateUser(userId: string, updateData: UpdateUserDto) {
+  async updateUser(
+    userId: string,
+    updateData: UpdateUserDto,
+    requester?: RequestingUser,
+  ) {
     try {
       const existing = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -277,6 +289,22 @@ export class UsersService {
 
       if (!existing) {
         throw new NotFoundException('User not found');
+      }
+
+      if (requester?.id) {
+        const isSelf = userId === requester.id;
+        const roleName = requester.role?.description ?? '';
+        const isAdmin = roleName === Role.ADMIN;
+        const isManager = roleName === Role.MANAGER;
+
+        if (isSelf && !isAdmin) {
+          throw new ForbiddenException(
+            'Only administrators can update their own dossier.',
+          );
+        }
+        if (!isSelf && !isAdmin && !isManager) {
+          throw new ForbiddenException('You cannot update this user.');
+        }
       }
 
       const profileData = {
@@ -314,7 +342,10 @@ export class UsersService {
 
       return this.serializeForResponse(updatedUser);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
         throw error;
       }
       const errorMessage =

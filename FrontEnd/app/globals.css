@@ -135,6 +135,39 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px var(--accent-dim) !important;
 }
 
+/* Inline period trigger (flat inside pill); list panel is custom in component */
+button.dashboard-select-trigger-inline:focus-visible {
+  outline: none;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+button.dashboard-select-trigger-field:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+@keyframes dashboard-select-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-select-panel {
+  animation: dashboard-select-panel-in 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-select-panel {
+    animation: none;
+  }
+}
+
 /* Transitions */
 button { transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease; }
 

@@ -17,6 +17,7 @@ import {
   NotificationStatus,
   DocumentCategory,
   ApprovalStatus,
+  EvaluationType,
 } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
@@ -40,13 +41,6 @@ function daysAgo(n: number): Date {
   return d;
 }
 
-function daysFromNow(n: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 /** Returns the Monday of the week containing `date` */
 function monday(date: Date): Date {
   const d = new Date(date);
@@ -55,6 +49,18 @@ function monday(date: Date): Date {
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+/** Every Monday from 2026-01-05 through 2026-04-27 (17 weeks) for Q1 timesheet demo data */
+function mondaysJanApr2026(): Date[] {
+  const out: Date[] = [];
+  const cur = new Date(2026, 0, 5, 12, 0, 0, 0);
+  const end = new Date(2026, 3, 27, 12, 0, 0, 0);
+  while (cur <= end) {
+    out.push(new Date(cur));
+    cur.setDate(cur.getDate() + 7);
+  }
+  return out;
 }
 
 /**
@@ -692,169 +698,162 @@ async function main() {
     return ts;
   }
 
-  // Salma – 8 weeks of timesheets
-  const salmaWeeks = [
-    { offset: 49, status: TimesheetStatus.APPROVED },
-    { offset: 42, status: TimesheetStatus.APPROVED },
-    { offset: 35, status: TimesheetStatus.APPROVED },
-    { offset: 28, status: TimesheetStatus.APPROVED },
-    { offset: 21, status: TimesheetStatus.APPROVED },
-    { offset: 14, status: TimesheetStatus.SUBMITTED },
-    { offset: 7, status: TimesheetStatus.SUBMITTED },
-    { offset: 0, status: TimesheetStatus.DRAFT },
+  // Timesheets Jan–Apr 2026: 18 weeks (one Monday per week), distributed across collaborators
+  const MONDAYS_2026_Q1 = mondaysJanApr2026();
+  const salmaEntries = [
+    { projectCode: 'PRJ-001', hours: 5, task: 'Feature Development', description: 'Implementing UI components for the dashboard module' },
+    { projectCode: 'PRJ-002', hours: 2, task: 'Dashboard design', description: 'Building analytics charts with Recharts' },
+    { projectCode: 'PRJ-005', hours: 1, task: 'Integration testing', description: 'Frontend integration tests for ERP API endpoints' },
   ];
-  for (const w of salmaWeeks) {
-    await createTimesheet('collab_salma', 'manager_eng', monday(daysAgo(w.offset)), w.status, [
-      { projectCode: 'PRJ-001', hours: 5, task: 'Feature Development', description: 'Implementing UI components for the dashboard module' },
-      { projectCode: 'PRJ-002', hours: 2, task: 'Dashboard design', description: 'Building analytics charts with Recharts' },
-      { projectCode: 'PRJ-005', hours: 1, task: 'Integration testing', description: 'Frontend integration tests for ERP API endpoints' },
-    ]);
-  }
-
-  // Omar – 6 weeks
-  const omarWeeks = [
-    { offset: 42, status: TimesheetStatus.APPROVED },
-    { offset: 35, status: TimesheetStatus.APPROVED },
-    { offset: 28, status: TimesheetStatus.APPROVED },
-    { offset: 21, status: TimesheetStatus.REJECTED },
-    { offset: 14, status: TimesheetStatus.APPROVED },
-    { offset: 7, status: TimesheetStatus.SUBMITTED },
-    { offset: 0, status: TimesheetStatus.DRAFT },
+  const omarEntries = [
+    { projectCode: 'PRJ-001', hours: 4, task: 'API Development', description: 'Building NestJS endpoints for timesheets module' },
+    { projectCode: 'PRJ-005', hours: 3, task: 'ERP Connector', description: 'Developing REST connector for ERP integration layer' },
+    { projectCode: 'PRJ-003', hours: 1, task: 'Mobile API', description: 'API endpoints for the mobile application' },
   ];
-  for (const w of omarWeeks) {
-    await createTimesheet('collab_omar', 'manager_eng', monday(daysAgo(w.offset)), w.status, [
-      { projectCode: 'PRJ-001', hours: 4, task: 'API Development', description: 'Building NestJS endpoints for timesheets module' },
-      { projectCode: 'PRJ-005', hours: 3, task: 'ERP Connector', description: 'Developing REST connector for ERP integration layer' },
-      { projectCode: 'PRJ-003', hours: 1, task: 'Mobile API', description: 'API endpoints for the mobile application' },
-    ]);
-  }
-
-  // Mehdi – 5 weeks
-  const mehdiWeeks = [
-    { offset: 35, status: TimesheetStatus.APPROVED },
-    { offset: 28, status: TimesheetStatus.APPROVED },
-    { offset: 21, status: TimesheetStatus.APPROVED },
-    { offset: 14, status: TimesheetStatus.SUBMITTED },
-    { offset: 7, status: TimesheetStatus.DRAFT },
+  const mehdiEntries = [
+    { projectCode: 'PRJ-001', hours: 4, task: 'Fullstack features', description: 'End-to-end implementation of leave management module' },
+    { projectCode: 'PRJ-005', hours: 3, task: 'ERP Integration', description: 'Lead development on ERP API integration' },
   ];
-  for (const w of mehdiWeeks) {
-    await createTimesheet('collab_mehdi', 'manager_eng', monday(daysAgo(w.offset)), w.status, [
-      { projectCode: 'PRJ-001', hours: 4, task: 'Fullstack features', description: 'End-to-end implementation of leave management module' },
-      { projectCode: 'PRJ-005', hours: 3, task: 'ERP Integration', description: 'Lead development on ERP API integration' },
-    ]);
-  }
+  const karimEntries = [
+    { projectCode: 'PRJ-004', hours: 6, task: 'Data Migration', description: 'Migrating employee records from Excel to new platform' },
+    { projectCode: 'PRJ-002', hours: 2, task: 'Operations reporting', description: 'Configuring operational KPI dashboards' },
+  ];
+  const fatimaEntries = [
+    { projectCode: 'PRJ-002', hours: 5, task: 'Financial Analytics', description: 'Budget variance analysis and reporting dashboards' },
+    { projectCode: 'PRJ-004', hours: 3, task: 'Data validation', description: 'Validating financial data migrated from legacy system' },
+  ];
+  const aminaEntries = [
+    { projectCode: 'PRJ-004', hours: 4, task: 'QA Testing', description: 'User acceptance testing for migrated HR records' },
+    { projectCode: 'PRJ-001', hours: 4, task: 'HR Process support', description: 'Supporting HR workflow configuration and testing' },
+  ];
 
-  // Karim – 4 weeks
-  for (const offset of [28, 21, 14, 7]) {
-    await createTimesheet('collab_karim', 'manager_ops', monday(daysAgo(offset)), TimesheetStatus.APPROVED, [
-      { projectCode: 'PRJ-004', hours: 6, task: 'Data Migration', description: 'Migrating employee records from Excel to new platform' },
-      { projectCode: 'PRJ-002', hours: 2, task: 'Operations reporting', description: 'Configuring operational KPI dashboards' },
-    ]);
-  }
+  const weekPlan: {
+    userKey: string;
+    managerKey: string;
+    entries: typeof salmaEntries;
+    statuses: TimesheetStatus[];
+  }[] = [
+    { userKey: 'collab_salma', managerKey: 'manager_eng', entries: salmaEntries, statuses: [TimesheetStatus.APPROVED, TimesheetStatus.APPROVED, TimesheetStatus.SUBMITTED] },
+    { userKey: 'collab_omar', managerKey: 'manager_eng', entries: omarEntries, statuses: [TimesheetStatus.APPROVED, TimesheetStatus.APPROVED, TimesheetStatus.REJECTED] },
+    { userKey: 'collab_mehdi', managerKey: 'manager_eng', entries: mehdiEntries, statuses: [TimesheetStatus.APPROVED, TimesheetStatus.APPROVED, TimesheetStatus.SUBMITTED] },
+    { userKey: 'collab_karim', managerKey: 'manager_ops', entries: karimEntries, statuses: [TimesheetStatus.APPROVED, TimesheetStatus.APPROVED, TimesheetStatus.APPROVED] },
+    { userKey: 'collab_fatima', managerKey: 'manager_ops', entries: fatimaEntries, statuses: [TimesheetStatus.APPROVED, TimesheetStatus.APPROVED, TimesheetStatus.SUBMITTED] },
+    { userKey: 'collab_amina', managerKey: 'manager_ops', entries: aminaEntries, statuses: [TimesheetStatus.APPROVED, TimesheetStatus.SUBMITTED] },
+  ];
 
-  // Fatima – 3 weeks
-  for (const offset of [21, 14, 7]) {
-    await createTimesheet('collab_fatima', 'manager_ops', monday(daysAgo(offset)), TimesheetStatus.APPROVED, [
-      { projectCode: 'PRJ-002', hours: 5, task: 'Financial Analytics', description: 'Budget variance analysis and reporting dashboards' },
-      { projectCode: 'PRJ-004', hours: 3, task: 'Data validation', description: 'Validating financial data migrated from legacy system' },
-    ]);
-  }
-
-  // Amina – 3 weeks
-  for (const offset of [21, 14, 7]) {
-    await createTimesheet('collab_amina', 'manager_ops', monday(daysAgo(offset)), offset === 21 ? TimesheetStatus.APPROVED : TimesheetStatus.SUBMITTED, [
-      { projectCode: 'PRJ-004', hours: 4, task: 'QA Testing', description: 'User acceptance testing for migrated HR records' },
-      { projectCode: 'PRJ-001', hours: 4, task: 'HR Process support', description: 'Supporting HR workflow configuration and testing' },
-    ]);
+  let weekIndex = 0;
+  for (const block of weekPlan) {
+    for (let w = 0; w < block.statuses.length; w++) {
+      const weekStart = monday(MONDAYS_2026_Q1[weekIndex]);
+      await createTimesheet(block.userKey, block.managerKey, weekStart, block.statuses[w], block.entries);
+      weekIndex++;
+    }
   }
 
   // ── 12. REQUESTS (LEAVE) ────────────────────────────────────────────────────
   console.log('10/12  Leave requests...');
 
+  // Leave requests with dates in Jan–Apr 2026 (dashboard filters by month)
   const leaveRequests = [
-    // Salma – approved PTO
+    // January 2026
     {
       key: 'collab_salma', managerKey: 'manager_eng',
       leaveType: LeaveType.PTO, status: RequestStatus.APPROVED,
-      start: daysAgo(20), end: daysAgo(18), workingDays: 3,
+      start: new Date('2026-01-08'), end: new Date('2026-01-10'), workingDays: 3,
       comment: 'Family vacation', decisionComment: 'Approved — no conflicts this week.',
     },
-    // Salma – pending PTO
-    {
-      key: 'collab_salma', managerKey: 'manager_eng',
-      leaveType: LeaveType.PTO, status: RequestStatus.PENDING,
-      start: daysFromNow(14), end: daysFromNow(18), workingDays: 5,
-      comment: 'Annual leave',
-    },
-    // Salma – draft sick leave
-    {
-      key: 'collab_salma', managerKey: 'manager_eng',
-      leaveType: LeaveType.SICK, status: RequestStatus.DRAFT,
-      start: daysFromNow(30), end: daysFromNow(31), workingDays: 2,
-      comment: 'Medical appointment',
-    },
-    // Omar – approved sick leave
     {
       key: 'collab_omar', managerKey: 'manager_eng',
       leaveType: LeaveType.SICK, status: RequestStatus.APPROVED,
-      start: daysAgo(30), end: daysAgo(28), workingDays: 3,
+      start: new Date('2026-01-13'), end: new Date('2026-01-15'), workingDays: 3,
       comment: 'Flu', decisionComment: 'Approved with medical certificate required.',
     },
-    // Omar – rejected PTO
     {
-      key: 'collab_omar', managerKey: 'manager_eng',
+      key: 'collab_mehdi', managerKey: 'manager_eng',
       leaveType: LeaveType.PTO, status: RequestStatus.REJECTED,
-      start: daysAgo(10), end: daysAgo(8), workingDays: 3,
+      start: new Date('2026-01-20'), end: new Date('2026-01-22'), workingDays: 3,
       comment: 'Weekend trip', decisionComment: 'Critical sprint week — cannot approve.',
     },
-    // Fatima – pending PTO
-    {
-      key: 'collab_fatima', managerKey: 'manager_ops',
-      leaveType: LeaveType.PTO, status: RequestStatus.PENDING,
-      start: daysFromNow(7), end: daysFromNow(9), workingDays: 3,
-      comment: 'Personal leave',
-    },
-    // Fatima – pending maternity
-    {
-      key: 'collab_fatima', managerKey: 'manager_ops',
-      leaveType: LeaveType.MATERNITY, status: RequestStatus.PENDING,
-      start: daysFromNow(45), end: daysFromNow(143), workingDays: 98,
-      comment: 'Maternity leave as per Moroccan labor code.',
-    },
-    // Karim – approved training
     {
       key: 'collab_karim', managerKey: 'manager_ops',
       leaveType: LeaveType.TRAINING, status: RequestStatus.APPROVED,
-      start: daysAgo(15), end: daysAgo(13), workingDays: 3,
-      comment: 'Agile Project Management certification', decisionComment: 'Approved — relevant to project delivery.',
+      start: new Date('2026-01-21'), end: new Date('2026-01-23'), workingDays: 3,
+      comment: 'Agile certification', decisionComment: 'Approved — relevant to project delivery.',
     },
-    // Amina – approved PTO
+    // February 2026
+    {
+      key: 'collab_fatima', managerKey: 'manager_ops',
+      leaveType: LeaveType.PTO, status: RequestStatus.PENDING,
+      start: new Date('2026-02-03'), end: new Date('2026-02-05'), workingDays: 3,
+      comment: 'Personal leave',
+    },
     {
       key: 'collab_amina', managerKey: 'manager_ops',
       leaveType: LeaveType.PTO, status: RequestStatus.APPROVED,
-      start: daysAgo(40), end: daysAgo(37), workingDays: 4,
-      comment: 'Personal leave',
+      start: new Date('2026-02-10'), end: new Date('2026-02-12'), workingDays: 3,
+      comment: 'Family event', decisionComment: 'Approved.',
     },
-    // Amina – pending PTO
     {
-      key: 'collab_amina', managerKey: 'manager_ops',
+      key: 'collab_salma', managerKey: 'manager_eng',
       leaveType: LeaveType.PTO, status: RequestStatus.PENDING,
-      start: daysFromNow(20), end: daysFromNow(22), workingDays: 3,
-      comment: 'Family event',
+      start: new Date('2026-02-17'), end: new Date('2026-02-21'), workingDays: 5,
+      comment: 'Annual leave planning',
     },
-    // Mehdi – approved unpaid
+    {
+      key: 'collab_omar', managerKey: 'manager_eng',
+      leaveType: LeaveType.SICK, status: RequestStatus.PENDING,
+      start: new Date('2026-02-24'), end: new Date('2026-02-25'), workingDays: 2,
+      comment: 'Medical follow-up',
+    },
+    // March 2026
     {
       key: 'collab_mehdi', managerKey: 'manager_eng',
       leaveType: LeaveType.UNPAID, status: RequestStatus.APPROVED,
-      start: daysAgo(60), end: daysAgo(56), workingDays: 5,
-      comment: 'Personal project abroad', decisionComment: 'Approved as unpaid — no pay deduction from PTO.',
+      start: new Date('2026-03-02'), end: new Date('2026-03-06'), workingDays: 5,
+      comment: 'Personal project', decisionComment: 'Approved as unpaid.',
     },
-    // Mehdi – cancelled
+    {
+      key: 'collab_fatima', managerKey: 'manager_ops',
+      leaveType: LeaveType.MATERNITY, status: RequestStatus.PENDING,
+      start: new Date('2026-03-16'), end: new Date('2026-06-20'), workingDays: 98,
+      comment: 'Maternity leave as per Moroccan labor code.',
+    },
+    {
+      key: 'collab_karim', managerKey: 'manager_ops',
+      leaveType: LeaveType.PTO, status: RequestStatus.APPROVED,
+      start: new Date('2026-03-11'), end: new Date('2026-03-13'), workingDays: 3,
+      comment: 'Spring break', decisionComment: 'Approved.',
+    },
+    {
+      key: 'collab_amina', managerKey: 'manager_ops',
+      leaveType: LeaveType.PTO, status: RequestStatus.APPROVED,
+      start: new Date('2026-03-23'), end: new Date('2026-03-25'), workingDays: 3,
+      comment: 'Personal leave', decisionComment: 'OK.',
+    },
+    // April 2026
+    {
+      key: 'collab_salma', managerKey: 'manager_eng',
+      leaveType: LeaveType.SICK, status: RequestStatus.DRAFT,
+      start: new Date('2026-04-07'), end: new Date('2026-04-08'), workingDays: 2,
+      comment: 'Medical appointment',
+    },
     {
       key: 'collab_mehdi', managerKey: 'manager_eng',
       leaveType: LeaveType.PTO, status: RequestStatus.CANCELLED,
-      start: daysAgo(5), end: daysAgo(3), workingDays: 3,
-      comment: 'Cancelled due to urgent project delivery.',
+      start: new Date('2026-04-14'), end: new Date('2026-04-16'), workingDays: 3,
+      comment: 'Cancelled — project deadline moved.',
+    },
+    {
+      key: 'collab_omar', managerKey: 'manager_eng',
+      leaveType: LeaveType.PTO, status: RequestStatus.APPROVED,
+      start: new Date('2026-04-01'), end: new Date('2026-04-04'), workingDays: 4,
+      comment: 'Eid travel', decisionComment: 'Approved.',
+    },
+    {
+      key: 'collab_fatima', managerKey: 'manager_ops',
+      leaveType: LeaveType.TRAINING, status: RequestStatus.APPROVED,
+      start: new Date('2026-04-21'), end: new Date('2026-04-23'), workingDays: 3,
+      comment: 'Finance workshop', decisionComment: 'Approved.',
     },
   ];
 
@@ -891,13 +890,42 @@ async function main() {
   // ── 13. EVALUATIONS ─────────────────────────────────────────────────────────
   console.log('11/12  Evaluations, documents, notifications...');
 
-  const evaluationsData = [
-    { managerKey: 'manager_eng', collabKey: 'collab_salma', score: 88.5, comment: 'Outstanding ownership of the frontend module. Strong delivery velocity and clean code.', date: new Date('2026-01-15') },
-    { managerKey: 'manager_eng', collabKey: 'collab_omar', score: 82.0, comment: 'Solid backend work. Needs to improve documentation practices.', date: new Date('2026-01-15') },
-    { managerKey: 'manager_eng', collabKey: 'collab_mehdi', score: 91.0, comment: 'Exceptional full-stack capabilities. Promoted to senior developer.', date: new Date('2026-01-20') },
-    { managerKey: 'manager_ops', collabKey: 'collab_karim', score: 78.0, comment: 'Reliable and consistent. Needs more initiative on process improvements.', date: new Date('2026-01-18') },
-    { managerKey: 'manager_ops', collabKey: 'collab_fatima', score: 85.0, comment: 'Excellent analytical skills. Delivered financial dashboards ahead of schedule.', date: new Date('2026-01-18') },
-    { managerKey: 'manager_ops', collabKey: 'collab_amina', score: 80.0, comment: 'Good HR domain knowledge. Improving on technical tool usage.', date: new Date('2026-01-20') },
+  const evaluationsData: {
+    managerKey: string;
+    collabKey: string;
+    score: number;
+    comment: string;
+    date: Date;
+    type: EvaluationType;
+  }[] = [
+    // January 2026
+    { managerKey: 'manager_eng', collabKey: 'collab_salma', score: 88.5, type: EvaluationType.ANNUAL, comment: 'Outstanding ownership of the frontend module. Strong delivery velocity and clean code.', date: new Date('2026-01-15') },
+    { managerKey: 'manager_eng', collabKey: 'collab_omar', score: 82.0, type: EvaluationType.ANNUAL, comment: 'Solid backend work. Needs to improve documentation practices.', date: new Date('2026-01-16') },
+    { managerKey: 'manager_eng', collabKey: 'collab_mehdi', score: 91.0, type: EvaluationType.PROJECT, comment: 'Exceptional full-stack capabilities on RHpro core delivery.', date: new Date('2026-01-22') },
+    { managerKey: 'manager_ops', collabKey: 'collab_karim', score: 78.0, type: EvaluationType.SEMIANNUAL, comment: 'Reliable and consistent. Needs more initiative on process improvements.', date: new Date('2026-01-18') },
+    { managerKey: 'manager_ops', collabKey: 'collab_fatima', score: 85.0, type: EvaluationType.ANNUAL, comment: 'Excellent analytical skills. Delivered financial dashboards ahead of schedule.', date: new Date('2026-01-24') },
+    { managerKey: 'manager_ops', collabKey: 'collab_amina', score: 80.0, type: EvaluationType.ANNUAL, comment: 'Good HR domain knowledge. Improving on technical tool usage.', date: new Date('2026-01-28') },
+    // February 2026
+    { managerKey: 'manager_eng', collabKey: 'collab_salma', score: 89.0, type: EvaluationType.SEMIANNUAL, comment: 'Q1 check-in: continued strong UX leadership.', date: new Date('2026-02-10') },
+    { managerKey: 'manager_eng', collabKey: 'collab_omar', score: 84.0, type: EvaluationType.PROJECT, comment: 'API hardening and documentation sprint completed successfully.', date: new Date('2026-02-14') },
+    { managerKey: 'manager_eng', collabKey: 'collab_mehdi', score: 92.5, type: EvaluationType.ANNUAL, comment: 'Mid-year review: exceeds expectations on integration work.', date: new Date('2026-02-20') },
+    { managerKey: 'manager_ops', collabKey: 'collab_karim', score: 79.5, type: EvaluationType.ANNUAL, comment: 'Data quality improved; more proactive communication needed.', date: new Date('2026-02-12') },
+    { managerKey: 'manager_ops', collabKey: 'collab_fatima', score: 86.0, type: EvaluationType.PROJECT, comment: 'Budget reporting module delivered on time.', date: new Date('2026-02-18') },
+    { managerKey: 'manager_ops', collabKey: 'collab_amina', score: 81.0, type: EvaluationType.THREE_SIXTY, comment: 'Peer feedback incorporated; testing coverage improved.', date: new Date('2026-02-25') },
+    // March 2026
+    { managerKey: 'manager_eng', collabKey: 'collab_salma', score: 87.0, type: EvaluationType.PROJECT, comment: 'Dashboard performance optimizations shipped.', date: new Date('2026-03-05') },
+    { managerKey: 'manager_eng', collabKey: 'collab_omar', score: 83.5, type: EvaluationType.SEMIANNUAL, comment: 'Stable velocity; focus on cross-team handoffs.', date: new Date('2026-03-11') },
+    { managerKey: 'manager_eng', collabKey: 'collab_mehdi', score: 90.0, type: EvaluationType.PROJECT, comment: 'Leave module end-to-end testing ownership.', date: new Date('2026-03-19') },
+    { managerKey: 'manager_ops', collabKey: 'collab_karim', score: 80.0, type: EvaluationType.ANNUAL, comment: 'Migration playbook documented for ops team.', date: new Date('2026-03-08') },
+    { managerKey: 'manager_ops', collabKey: 'collab_fatima', score: 87.5, type: EvaluationType.SEMIANNUAL, comment: 'Forecast accuracy up vs prior quarter.', date: new Date('2026-03-16') },
+    { managerKey: 'manager_ops', collabKey: 'collab_amina', score: 82.5, type: EvaluationType.ANNUAL, comment: 'UAT cycles well structured.', date: new Date('2026-03-23') },
+    // April 2026
+    { managerKey: 'manager_eng', collabKey: 'collab_salma', score: 90.0, type: EvaluationType.PROJECT, comment: 'Accessibility audit completed before release.', date: new Date('2026-04-08') },
+    { managerKey: 'manager_eng', collabKey: 'collab_omar', score: 85.0, type: EvaluationType.ANNUAL, comment: 'Production incidents reduced; on-call rotation effective.', date: new Date('2026-04-11') },
+    { managerKey: 'manager_eng', collabKey: 'collab_mehdi', score: 93.0, type: EvaluationType.SEMIANNUAL, comment: 'Outstanding quarter; ready for tech lead responsibilities.', date: new Date('2026-04-17') },
+    { managerKey: 'manager_ops', collabKey: 'collab_karim', score: 81.0, type: EvaluationType.PROJECT, comment: 'ERP connector rollout to pilot site.', date: new Date('2026-04-09') },
+    { managerKey: 'manager_ops', collabKey: 'collab_fatima', score: 88.0, type: EvaluationType.ANNUAL, comment: 'Q1 close smooth; variance analysis praised by finance.', date: new Date('2026-04-14') },
+    { managerKey: 'manager_ops', collabKey: 'collab_amina', score: 83.0, type: EvaluationType.PROJECT, comment: 'Regression suite expanded for HR workflows.', date: new Date('2026-04-22') },
   ];
 
   for (const e of evaluationsData) {
@@ -910,6 +938,7 @@ async function main() {
           managerId: userIds[e.managerKey],
           collaboratorId: userIds[e.collabKey],
           reviewDate: e.date,
+          evaluationType: e.type,
           globalScore: new Decimal(e.score),
           comments: e.comment,
         },

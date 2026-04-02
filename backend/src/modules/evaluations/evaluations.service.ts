@@ -63,10 +63,18 @@ export class EvaluationsService {
     if (filters?.managerId) where.managerId = filters.managerId;
     if (filters?.evaluationType) where.evaluationType = filters.evaluationType;
     if (filters?.year) {
-      where.reviewDate = {
-        gte: new Date(`${filters.year}-01-01`),
-        lte: new Date(`${filters.year}-12-31`),
-      };
+      const y = filters.year;
+      const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
+      const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
+      where.OR = [
+        { reviewDate: { gte: start, lte: end } },
+        {
+          AND: [
+            { reviewDate: null },
+            { createdAt: { gte: start, lte: end } },
+          ],
+        },
+      ];
     }
 
     return this.prisma.evaluation.findMany({

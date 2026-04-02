@@ -12,6 +12,7 @@ import {
   scoreBg,
 } from "./types";
 import { useLanguage } from "@/context/LanguageContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 interface Props {
   isAdmin?: boolean;
@@ -105,16 +106,19 @@ export default function PerformanceReports({ isAdmin, collaboratorId }: Props) {
           )}
         </div>
 
-        {(tab === "departments") && (
-          <select
+        {tab === "departments" && (
+          <AppSelect<number>
+            id="performance-reports-year"
             value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-orange-400"
-          >
-            {[now.getFullYear() - 1, now.getFullYear()].map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+            onChange={setYear}
+            options={[now.getFullYear() - 1, now.getFullYear()].map((y) => ({
+              value: y,
+              label: String(y),
+            }))}
+            ariaLabel={t("Année", "Year")}
+            tone="default"
+            triggerClassName="min-w-[5rem]"
+          />
         )}
       </div>
 

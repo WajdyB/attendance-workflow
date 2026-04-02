@@ -104,7 +104,7 @@ export default function ManagerApprovals({ managerId, onUpdate }: Props) {
             </p>
           </div>
         ) : (
-          <div style={{ divide: "1px solid var(--border)" }}>
+          <div>
             {requests.map((req, idx) => {
               const leaveLabel = req.leaveType ? LEAVE_TYPE_LABELS[req.leaveType] : null;
               return (

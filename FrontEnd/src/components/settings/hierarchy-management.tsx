@@ -6,6 +6,7 @@ import { apiClient } from "@/utils/api-client";
 import apiConfig from "@/utils/api-config";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 type UserRole = {
   id: string;
@@ -294,36 +295,42 @@ export default function HierarchyManagement() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="mb-1 block text-sm text-stone-300">{labels.collaborator}</label>
-            <select
+            <AppSelect<string>
+              id="hierarchy-collaborator"
               value={selectedCollaboratorId}
-              onChange={(e) => setSelectedCollaboratorId(e.target.value)}
-              className="w-full rounded-lg border border-stone-600/30 bg-white/10 px-3 py-2 text-sm text-stone-200"
-            >
-              <option value="">{labels.chooseCollaborator}</option>
-              {collaborators.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.firstName} {entry.lastName}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedCollaboratorId}
+              options={[
+                { value: "", label: labels.chooseCollaborator },
+                ...collaborators.map((entry) => ({
+                  value: entry.id,
+                  label: `${entry.firstName} ${entry.lastName}`,
+                })),
+              ]}
+              ariaLabel={labels.collaborator}
+              tone="dark"
+              fullWidth
+            />
           </div>
 
           <div>
             <label className="mb-1 block text-sm text-stone-300">{labels.manager}</label>
-            <select
+            <AppSelect<string>
+              id="hierarchy-manager"
               value={selectedManagerId}
-              onChange={(e) => setSelectedManagerId(e.target.value)}
-              className="w-full rounded-lg border border-stone-600/30 bg-white/10 px-3 py-2 text-sm text-stone-200"
-            >
-              <option value="">{labels.chooseManager}</option>
-              {managers
-                .filter((entry) => entry.id !== selectedCollaborator?.id)
-                .map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.firstName} {entry.lastName}
-                  </option>
-                ))}
-            </select>
+              onChange={setSelectedManagerId}
+              options={[
+                { value: "", label: labels.chooseManager },
+                ...managers
+                  .filter((entry) => entry.id !== selectedCollaborator?.id)
+                  .map((entry) => ({
+                    value: entry.id,
+                    label: `${entry.firstName} ${entry.lastName}`,
+                  })),
+              ]}
+              ariaLabel={labels.manager}
+              tone="dark"
+              fullWidth
+            />
           </div>
 
           <div className="flex items-end">

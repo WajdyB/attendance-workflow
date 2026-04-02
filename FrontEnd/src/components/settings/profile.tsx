@@ -21,6 +21,9 @@ import {
   Shield,
   BadgeCheck,
   Users,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 import DocumentsPanel from "./documents";
 
@@ -181,8 +184,51 @@ const InfoRow = ({ label, value, icon }: { label: string; value?: string | null;
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
+type DossierEditFormState = {
+  firstName: string;
+  lastName: string;
+  personalEmail: string;
+  workEmail: string;
+  phone: string;
+  phoneFixed: string;
+  address: string;
+  birthdate: string;
+  jobTitle: string;
+  bankName: string;
+  bankBicSwift: string;
+  rib: string;
+  cnssNumber: string;
+};
+
+/** API may return ISO string or a Date-like value */
+function birthdateToInputValue(b: unknown): string {
+  if (b == null || b === "") return "";
+  if (typeof b === "string") return b.length >= 10 ? b.slice(0, 10) : b;
+  const d = b instanceof Date ? b : new Date(String(b));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function profileToEditForm(u: DossierProfile): DossierEditFormState {
+  return {
+    firstName: u.firstName || "",
+    lastName: u.lastName || "",
+    personalEmail: u.personalEmail || "",
+    workEmail: u.workEmail || "",
+    phone: u.phone || "",
+    phoneFixed: u.phoneFixed || "",
+    address: u.address || "",
+    birthdate: birthdateToInputValue(u.birthdate),
+    jobTitle: u.jobTitle || "",
+    bankName: u.bankName || "",
+    bankBicSwift: u.bankBicSwift || "",
+    rib: u.rib || "",
+    cnssNumber: u.cnssNumber || "",
+  };
+}
+
 export default function EmployeeProfile() {
-  const { databaseUser, isLoading } = useAuth();
+  const { databaseUser, isLoading, updateUser } = useAuth();
   const { language } = useLanguage();
   const fr = language === "fr";
   const locale = fr ? "fr-FR" : "en-US";
@@ -193,6 +239,14 @@ export default function EmployeeProfile() {
   const [loadingDossier, setLoadingDossier] = useState(false);
   const [loadingEvals, setLoadingEvals] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingPersonal, setEditingPersonal] = useState(false);
+  const [dossierEditForm, setDossierEditForm] = useState<DossierEditFormState | null>(null);
+  const [savingPersonal, setSavingPersonal] = useState(false);
+  const [personalSaveError, setPersonalSaveError] = useState<string | null>(null);
+
+  const isAdmin = (databaseUser?.role?.description || "")
+    .toLowerCase()
+    .includes("admin");
 
   useEffect(() => {
     if (!databaseUser?.id) return;
@@ -238,6 +292,81 @@ export default function EmployeeProfile() {
   const { hierarchy, contracts } = dossier;
   const latestContract = contracts.latest;
 
+  const savePersonalDossier = async () => {
+    if (!databaseUser?.id || !dossierEditForm) return;
+    setSavingPersonal(true);
+    setPersonalSaveError(null);
+    const f = dossierEditForm;
+    const payload: Record<string, string | undefined> = {
+      firstName: f.firstName.trim(),
+      lastName: f.lastName.trim(),
+      personalEmail: f.personalEmail.trim(),
+      workEmail: f.workEmail.trim(),
+      phone: f.phone.trim(),
+      address: f.address.trim(),
+      jobTitle: f.jobTitle.trim(),
+      bankName: f.bankName.trim(),
+      cnssNumber: f.cnssNumber.trim(),
+    };
+    if (f.phoneFixed.trim()) payload.phoneFixed = f.phoneFixed.trim();
+    if (f.bankBicSwift.trim()) payload.bankBicSwift = f.bankBicSwift.trim();
+    if (f.rib.trim()) payload.rib = f.rib.trim();
+    if (f.birthdate.trim()) {
+      payload.birthdate = new Date(`${f.birthdate}T12:00:00`).toISOString();
+    }
+    try {
+      await apiClient.patch(apiConfig.endpoints.users.byId(databaseUser.id), payload);
+      const fresh = await apiClient.get<DossierResponse>(
+        apiConfig.endpoints.users.dossier(databaseUser.id),
+      );
+      setDossier(fresh);
+      const p = fresh.profile;
+      updateUser({
+        firstName: p.firstName,
+        lastName: p.lastName,
+        personalEmail: p.personalEmail ?? "",
+        workEmail: p.workEmail ?? "",
+        phone: p.phone ?? "",
+        address: p.address ?? "",
+        birthdate: p.birthdate ? String(p.birthdate).slice(0, 10) : "",
+        jobTitle: p.jobTitle ?? "",
+        bankName: p.bankName ?? "",
+        cnssNumber: p.cnssNumber ?? "",
+      });
+      setEditingPersonal(false);
+      setDossierEditForm(null);
+    } catch (e) {
+      setPersonalSaveError(
+        fr
+          ? "Enregistrement impossible. Vérifiez les champs ou vos droits."
+          : "Could not save. Check fields or permissions.",
+      );
+      console.error(e);
+    } finally {
+      setSavingPersonal(false);
+    }
+  };
+
+  const startEditPersonal = () => {
+    setDossierEditForm(profileToEditForm(user));
+    setPersonalSaveError(null);
+    setEditingPersonal(true);
+  };
+
+  const cancelEditPersonal = () => {
+    setEditingPersonal(false);
+    setDossierEditForm(null);
+    setPersonalSaveError(null);
+  };
+
+  const inputClass =
+    "w-full rounded-lg px-3 py-2 text-sm outline-none transition-[border-color] focus:border-[var(--accent)]";
+  const inputStyle: React.CSSProperties = {
+    background: "var(--bg)",
+    border: "1px solid var(--border)",
+    color: "var(--text-1)",
+  };
+
   const tabs: { key: typeof activeTab; label: string; icon: React.ReactNode }[] = [
     { key: "personal",     label: fr ? "Informations"   : "Personal",     icon: <User size={14} /> },
     { key: "hierarchy",    label: fr ? "Hiérarchie"     : "Hierarchy",    icon: <Users size={14} /> },
@@ -280,12 +409,6 @@ export default function EmployeeProfile() {
                 </span>
               )}
             </div>
-          </div>
-          <div className="text-right hidden sm:block">
-            <p className="text-xs" style={{ color: "var(--text-3)" }}>ID</p>
-            <p className="text-xs font-mono mt-0.5" style={{ color: "var(--text-2)" }}>
-              {user.id.slice(-10).toUpperCase()}
-            </p>
           </div>
         </div>
 
@@ -333,49 +456,235 @@ export default function EmployeeProfile() {
         {/* ── Personal info ── */}
         {activeTab === "personal" && (
           <div className="space-y-6">
-            {/* Contact */}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
-                {fr ? "Contact" : "Contact"}
+            {!isAdmin && (
+              <p className="text-xs rounded-lg px-3 py-2" style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                {fr
+                  ? "Votre dossier est consultable uniquement. Seuls les administrateurs peuvent modifier leur dossier depuis cette page."
+                  : "Your dossier is read-only here. Only administrators can edit their own dossier on this page."}
               </p>
-              <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                <div className="px-4">
-                  <InfoRow label={fr ? "E-mail professionnel" : "Work email"} value={user.workEmail} icon={<Mail size={14} />} />
-                  <InfoRow label={fr ? "E-mail personnel" : "Personal email"} value={user.personalEmail} icon={<Mail size={14} />} />
-                  <InfoRow label={fr ? "Téléphone mobile" : "Mobile"} value={user.phone} icon={<Phone size={14} />} />
-                  <InfoRow label={fr ? "Téléphone fixe" : "Landline"} value={user.phoneFixed} icon={<Phone size={14} />} />
-                  <InfoRow label={fr ? "Adresse" : "Address"} value={user.address} icon={<MapPin size={14} />} />
-                  <div className="py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span style={{ color: "var(--text-3)" }}><Calendar size={14} /></span>
-                        <span className="text-sm" style={{ color: "var(--text-3)" }}>{fr ? "Date de naissance" : "Birth date"}</span>
+            )}
+            {isAdmin && !editingPersonal && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={startEditPersonal}
+                  className="btn-primary inline-flex items-center gap-2"
+                  style={{ padding: "8px 14px" }}
+                >
+                  <Pencil size={14} />
+                  {fr ? "Modifier le dossier" : "Edit dossier"}
+                </button>
+              </div>
+            )}
+            {isAdmin && editingPersonal && dossierEditForm ? (
+              <>
+                {personalSaveError && (
+                  <p className="text-xs rounded-lg px-3 py-2" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.35)", color: "#ef4444" }}>
+                    {personalSaveError}
+                  </p>
+                )}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                    {fr ? "Contact" : "Contact"}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Prénom" : "First name"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.firstName}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, firstName: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Nom" : "Last name"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.lastName}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, lastName: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "E-mail professionnel" : "Work email"}
+                      <input
+                        type="email"
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.workEmail}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, workEmail: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "E-mail personnel" : "Personal email"}
+                      <input
+                        type="email"
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.personalEmail}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, personalEmail: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Téléphone mobile" : "Mobile"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.phone}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, phone: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Téléphone fixe" : "Landline"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.phoneFixed}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, phoneFixed: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs sm:col-span-2" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Adresse" : "Address"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.address}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, address: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Date de naissance" : "Birth date"}
+                      <input
+                        type="date"
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.birthdate}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, birthdate: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Poste" : "Job title"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.jobTitle}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, jobTitle: e.target.value } : p))}
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                    {fr ? "Informations financières & administratives" : "Financial & administrative info"}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-xs sm:col-span-2" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Banque" : "Bank"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.bankName}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, bankName: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      BIC / SWIFT
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.bankBicSwift}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, bankBicSwift: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-2)" }}>
+                      RIB / IBAN
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.rib}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, rib: e.target.value } : p))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs sm:col-span-2" style={{ color: "var(--text-2)" }}>
+                      {fr ? "Numéro CNSS" : "CNSS number"}
+                      <input
+                        className={inputClass}
+                        style={inputStyle}
+                        value={dossierEditForm.cnssNumber}
+                        onChange={(e) => setDossierEditForm((p) => (p ? { ...p, cnssNumber: e.target.value } : p))}
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={cancelEditPersonal}
+                    disabled={savingPersonal}
+                    className="btn-ghost inline-flex items-center gap-2"
+                  >
+                    <X size={14} />
+                    {fr ? "Annuler" : "Cancel"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={savePersonalDossier}
+                    disabled={savingPersonal}
+                    className="btn-primary inline-flex items-center gap-2"
+                  >
+                    {savingPersonal ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    {fr ? "Enregistrer" : "Save"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Contact */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                    {fr ? "Contact" : "Contact"}
+                  </p>
+                  <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    <div className="px-4">
+                      <InfoRow label={fr ? "E-mail professionnel" : "Work email"} value={user.workEmail} icon={<Mail size={14} />} />
+                      <InfoRow label={fr ? "E-mail personnel" : "Personal email"} value={user.personalEmail} icon={<Mail size={14} />} />
+                      <InfoRow label={fr ? "Téléphone mobile" : "Mobile"} value={user.phone} icon={<Phone size={14} />} />
+                      <InfoRow label={fr ? "Téléphone fixe" : "Landline"} value={user.phoneFixed} icon={<Phone size={14} />} />
+                      <InfoRow label={fr ? "Adresse" : "Address"} value={user.address} icon={<MapPin size={14} />} />
+                      <div className="py-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span style={{ color: "var(--text-3)" }}><Calendar size={14} /></span>
+                            <span className="text-sm" style={{ color: "var(--text-3)" }}>{fr ? "Date de naissance" : "Birth date"}</span>
+                          </div>
+                          <span className="text-sm font-medium" style={{ color: user.birthdate ? "var(--text-1)" : "var(--text-3)" }}>
+                            {user.birthdate
+                              ? new Date(user.birthdate).toLocaleDateString(locale, { day: "2-digit", month: "long", year: "numeric" })
+                              : "—"}
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-sm font-medium" style={{ color: user.birthdate ? "var(--text-1)" : "var(--text-3)" }}>
-                        {user.birthdate
-                          ? new Date(user.birthdate).toLocaleDateString(locale, { day: "2-digit", month: "long", year: "numeric" })
-                          : "—"}
-                      </span>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Financial */}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
-                {fr ? "Informations financières & administratives" : "Financial & administrative info"}
-              </p>
-              <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                <div className="px-4">
-                  <InfoRow label={fr ? "Banque" : "Bank"} value={user.bankName} icon={<Landmark size={14} />} />
-                  <InfoRow label="BIC / SWIFT" value={user.bankBicSwift} icon={<Landmark size={14} />} />
-                  <InfoRow label="RIB / IBAN" value={user.rib} icon={<Landmark size={14} />} />
-                  <InfoRow label={fr ? "Numéro CNSS" : "CNSS number"} value={user.cnssNumber} icon={<BadgeCheck size={14} />} />
+                {/* Financial */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>
+                    {fr ? "Informations financières & administratives" : "Financial & administrative info"}
+                  </p>
+                  <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    <div className="px-4">
+                      <InfoRow label={fr ? "Banque" : "Bank"} value={user.bankName} icon={<Landmark size={14} />} />
+                      <InfoRow label="BIC / SWIFT" value={user.bankBicSwift} icon={<Landmark size={14} />} />
+                      <InfoRow label="RIB / IBAN" value={user.rib} icon={<Landmark size={14} />} />
+                      <InfoRow label={fr ? "Numéro CNSS" : "CNSS number"} value={user.cnssNumber} icon={<BadgeCheck size={14} />} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         )}
 
@@ -737,7 +1046,11 @@ export default function EmployeeProfile() {
 
         {/* ── Documents ── */}
         {activeTab === "documents" && (
-          <DocumentsPanel userId={user.id} initialDocuments={dossier.documents} />
+          <DocumentsPanel
+            userId={user.id}
+            initialDocuments={dossier.documents}
+            canUpload={isAdmin}
+          />
         )}
       </div>
     </div>

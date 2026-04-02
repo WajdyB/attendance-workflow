@@ -24,7 +24,7 @@ export default function PerformancePage() {
   const { language } = useLanguage();
   const tl = (fr: string, en: string) => (language === "fr" ? fr : en);
 
-  const role = (databaseUser?.role?.description ?? databaseUser?.role?.name ?? "").toUpperCase();
+  const role = (databaseUser?.role?.description ?? "").toUpperCase();
   const isAdmin = role.includes("ADMIN");
   const isManager = role.includes("MANAGER");
   const isCollaborator = !isAdmin && !isManager && !!databaseUser;

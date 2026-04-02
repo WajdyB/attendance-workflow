@@ -5,6 +5,7 @@ import { apiClient } from "@/utils/api-client";
 import apiConfig from "@/utils/api-config";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 type Role = {
   id: string;
@@ -387,6 +388,7 @@ export default function EmployeesSettings() {
               <InputField label={labels.rib} value={createForm.rib || ""} onChange={(value) => setCreateForm((prev) => ({ ...prev, rib: value }))} />
               <InputField label={labels.cnssNumber} required value={createForm.cnssNumber} onChange={(value) => setCreateForm((prev) => ({ ...prev, cnssNumber: value }))} />
               <SelectField
+                fieldId="employee-create-role"
                 label={labels.role}
                 value={createForm.roleId || ""}
                 onChange={(value) => setCreateForm((prev) => ({ ...prev, roleId: value }))}
@@ -394,6 +396,7 @@ export default function EmployeesSettings() {
                 placeholder={labels.chooseRole}
               />
               <SelectField
+                fieldId="employee-create-department"
                 label={labels.department}
                 value={createForm.departmentId || ""}
                 onChange={(value) => setCreateForm((prev) => ({ ...prev, departmentId: value }))}
@@ -401,6 +404,7 @@ export default function EmployeesSettings() {
                 placeholder={labels.chooseDepartment}
               />
               <SelectField
+                fieldId="employee-create-account-status"
                 label={labels.accountStatus}
                 value={createForm.accountStatus || "ACTIVE"}
                 onChange={(value) => setCreateForm((prev) => ({ ...prev, accountStatus: value as "ACTIVE" | "INACTIVE" }))}
@@ -423,6 +427,7 @@ export default function EmployeesSettings() {
             <h2 className="text-lg font-semibold text-stone-900">{labels.updateTitle}</h2>
             <div className="mt-4">
               <SelectField
+                fieldId="employee-update-select-user"
                 label={labels.selectEmployee}
                 value={selectedUserId}
                 onChange={handleUserSelection}
@@ -446,6 +451,7 @@ export default function EmployeesSettings() {
               <InputField label={labels.rib} value={String(editForm.rib || "")} onChange={(value) => setEditForm((prev) => ({ ...prev, rib: value }))} />
               <InputField label={labels.cnssNumber} value={String(editForm.cnssNumber || "")} onChange={(value) => setEditForm((prev) => ({ ...prev, cnssNumber: value }))} />
               <SelectField
+                fieldId="employee-update-role"
                 label={labels.role}
                 value={String(editForm.roleId || "")}
                 onChange={(value) => setEditForm((prev) => ({ ...prev, roleId: value }))}
@@ -453,6 +459,7 @@ export default function EmployeesSettings() {
                 placeholder={labels.chooseRole}
               />
               <SelectField
+                fieldId="employee-update-department"
                 label={labels.department}
                 value={String(editForm.departmentId || "")}
                 onChange={(value) => setEditForm((prev) => ({ ...prev, departmentId: value }))}
@@ -460,6 +467,7 @@ export default function EmployeesSettings() {
                 placeholder={labels.chooseDepartment}
               />
               <SelectField
+                fieldId="employee-update-account-status"
                 label={labels.accountStatus}
                 value={String(editForm.accountStatus || "ACTIVE")}
                 onChange={(value) =>
@@ -516,33 +524,35 @@ function InputField({
 }
 
 function SelectField({
+  fieldId,
   label,
   value,
   onChange,
   options,
   placeholder,
 }: {
+  fieldId: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
   placeholder?: string;
 }) {
+  const mergedOptions = placeholder
+    ? [{ value: "", label: placeholder }, ...options]
+    : options;
   return (
     <label className="flex flex-col gap-1 text-sm text-stone-700">
       <span>{label}</span>
-      <select
+      <AppSelect<string>
+        id={fieldId}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="rounded-lg border border-orange-200 px-3 py-2 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-      >
-        {placeholder ? <option value="">{placeholder}</option> : null}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        options={mergedOptions}
+        ariaLabel={label}
+        tone="default"
+        fullWidth
+      />
     </label>
   );
 }

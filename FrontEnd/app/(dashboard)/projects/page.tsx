@@ -159,7 +159,7 @@ export default function ProjectsPage() {
           <div className="flex gap-2">
             {(isAdmin || isManager) && (
               <button
-                onClick={() => setView(view === "reports" ? "list" : "reports")}
+                onClick={() => setView("reports")}
                 className="btn-ghost"
               >
                 <BarChart2 size={15} />

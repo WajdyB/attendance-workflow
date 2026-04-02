@@ -17,6 +17,7 @@ import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
 import { Project, ProjectMember, ProjectHoursReport, STATUS_META } from "./types";
 import { useLanguage } from "@/context/LanguageContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 interface CollaboratorOption {
   id: string;
@@ -335,18 +336,27 @@ export default function ProjectDetail({ project: initial, isAdmin, isManager, on
                 {t("Ajouter un membre", "Add member")}
               </h3>
               <div className="flex flex-wrap gap-3">
-                <select
+                <AppSelect<string>
+                  id="project-detail-add-member"
                   value={selectedCollaboratorId}
-                  onChange={(e) => setSelectedCollaboratorId(e.target.value)}
-                  className="flex-1 min-w-[200px] rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
-                >
-                  <option value="">{t("— Sélectionner un collaborateur —", "— Select a collaborator —")}</option>
-                  {collaborators.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.firstName} {c.lastName}{c.jobTitle ? ` — ${c.jobTitle}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedCollaboratorId}
+                  options={[
+                    {
+                      value: "",
+                      label: t(
+                        "— Sélectionner un collaborateur —",
+                        "— Select a collaborator —",
+                      ),
+                    },
+                    ...collaborators.map((c) => ({
+                      value: c.id,
+                      label: `${c.firstName} ${c.lastName}${c.jobTitle ? ` — ${c.jobTitle}` : ""}`,
+                    })),
+                  ]}
+                  ariaLabel={t("Collaborateur", "Collaborator")}
+                  tone="default"
+                  triggerClassName="flex-1 min-w-[200px]"
+                />
                 <input
                   type="text"
                   value={roleOnProject}

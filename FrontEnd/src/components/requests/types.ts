@@ -40,6 +40,7 @@ export interface LeaveRequest {
     lastName: string;
     personalEmail?: string;
     pictureUrl?: string;
+    jobTitle?: string;
     role?: { description: string };
     department?: { name: string };
   };

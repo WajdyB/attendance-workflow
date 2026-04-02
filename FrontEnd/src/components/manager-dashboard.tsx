@@ -280,7 +280,7 @@ export default function ManagerDashboard() {
                 <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-3)" }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: "var(--text-2)" }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  formatter={(v: number) => [`${v}h`, t("Heures", "Hours")]}
+                  formatter={(v) => [`${Number(v ?? 0)}h`, t("Heures", "Hours")]}
                   contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: "var(--text-1)", fontWeight: 600 }}
                 />

@@ -6,6 +6,7 @@ import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
 import { Evaluation, EvaluationType, EVAL_TYPE_META } from "./types";
 import { useLanguage } from "@/context/LanguageContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 interface CollaboratorOption {
   id: string;
@@ -124,19 +125,21 @@ export default function EvaluationForm({ onClose, onSuccess, editEvaluation, col
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
                 {t("Collaborateur", "Collaborator")} *
               </label>
-              <select
+              <AppSelect<string>
+                id="evaluation-form-collaborator"
                 value={collaboratorId}
-                onChange={(e) => setCollaboratorId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
-              >
-                <option value="">{t("— Sélectionner —", "— Select —")}</option>
-                {collaborators.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.user.firstName} {c.user.lastName}
-                    {c.user.jobTitle ? ` — ${c.user.jobTitle}` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={setCollaboratorId}
+                options={[
+                  { value: "", label: t("— Sélectionner —", "— Select —") },
+                  ...collaborators.map((c) => ({
+                    value: c.id,
+                    label: `${c.user.firstName} ${c.user.lastName}${c.user.jobTitle ? ` — ${c.user.jobTitle}` : ""}`,
+                  })),
+                ]}
+                ariaLabel={t("Collaborateur", "Collaborator")}
+                tone="default"
+                fullWidth
+              />
             </div>
           )}
 

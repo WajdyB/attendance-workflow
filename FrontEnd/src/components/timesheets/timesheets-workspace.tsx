@@ -14,6 +14,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Cell, AreaChart, Area,
 } from "recharts";
+import { AppSelect } from "@/components/ui/app-select";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1161,15 +1162,22 @@ function CollaboratorTimesheets({ userId, t }: { userId: string; t: (k: string) 
                     {isEditable && isOpen && (
                       <div className="px-4 py-3 space-y-2" style={{ background: "var(--surface-raised)", borderBottom: "1px solid var(--border)" }}>
                         <div className="grid grid-cols-3 gap-2">
-                          <select value={draftEntry.projectId}
-                            onChange={e => setDraftEntry(prev => ({ ...prev, projectId: e.target.value }))}
-                            className="rounded-lg px-3 py-2 text-sm"
-                            style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text-1)" }}>
-                            <option value="">— Projet</option>
-                            {projects.filter(p => p.status === "IN_PROGRESS").map(p => (
-                              <option key={p.id} value={p.id}>{p.label}</option>
-                            ))}
-                          </select>
+                          <AppSelect<string>
+                            id="timesheet-entry-project-inline"
+                            value={draftEntry.projectId}
+                            onChange={(v) =>
+                              setDraftEntry((prev) => ({ ...prev, projectId: v }))
+                            }
+                            options={[
+                              { value: "", label: "— Projet" },
+                              ...projects
+                                .filter((p) => p.status === "IN_PROGRESS")
+                                .map((p) => ({ value: p.id, label: p.label })),
+                            ]}
+                            ariaLabel="Projet"
+                            tone="surface"
+                            fullWidth
+                          />
                           <input type="text" placeholder="Tâche (optionnel)" value={draftEntry.taskName}
                             onChange={e => setDraftEntry(prev => ({ ...prev, taskName: e.target.value }))}
                             className="rounded-lg px-3 py-2 text-sm"
@@ -1249,15 +1257,22 @@ function CollaboratorTimesheets({ userId, t }: { userId: string; t: (k: string) 
                   Ajouter une entrée — {weekDays.find(d => d.dateStr === selectedDay)?.label ?? selectedDay}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <select value={draftEntry.projectId}
-                    onChange={e => setDraftEntry(prev => ({ ...prev, projectId: e.target.value }))}
-                    className="rounded-xl px-3 py-2.5 text-sm"
-                    style={{ background: "var(--surface-raised)", border: "1px solid var(--border-strong)", color: "var(--text-1)" }}>
-                    <option value="">— Sélectionner un projet</option>
-                    {projects.filter(p => p.status === "IN_PROGRESS").map(p => (
-                      <option key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                  </select>
+                  <AppSelect<string>
+                    id="timesheet-entry-project-daily"
+                    value={draftEntry.projectId}
+                    onChange={(v) =>
+                      setDraftEntry((prev) => ({ ...prev, projectId: v }))
+                    }
+                    options={[
+                      { value: "", label: "— Sélectionner un projet" },
+                      ...projects
+                        .filter((p) => p.status === "IN_PROGRESS")
+                        .map((p) => ({ value: p.id, label: p.label })),
+                    ]}
+                    ariaLabel="Projet"
+                    tone="surfaceRaised"
+                    fullWidth
+                  />
                   <input type="text" placeholder="Tâche / description (optionnel)" value={draftEntry.taskName}
                     onChange={e => setDraftEntry(prev => ({ ...prev, taskName: e.target.value }))}
                     className="rounded-xl px-3 py-2.5 text-sm"

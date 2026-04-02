@@ -7,6 +7,7 @@ import apiConfig from "@/utils/api-config";
 import { useLanguage } from "@/context/LanguageContext";
 import { Camera, Save, X, Trash2 } from "lucide-react";
 import ConfirmModal from "@/components/ConfirmModal";
+import { AppSelect } from "@/components/ui/app-select";
 
 type Role = {
   id: string;
@@ -854,23 +855,27 @@ export default function EmployeeDetail({
                         <label className="mb-1 block text-sm text-stone-300">
                           {labels.documentCategory}
                         </label>
-                        <select
+                        <AppSelect<string>
+                          id={`employee-detail-doc-cat-${document.id}`}
                           value={document.category}
-                          onChange={(e) =>
+                          onChange={(v) =>
                             updatePendingDocument(
                               document.id,
                               "category",
-                              e.target.value as DocumentCategory,
+                              v as DocumentCategory,
                             )
                           }
-                          className="w-full rounded-lg border border-stone-600/30 bg-white/10 px-3 py-2 text-sm text-stone-200"
-                        >
-                          <option value="HR">HR</option>
-                          <option value="CONTRACT">CONTRACT</option>
-                          <option value="PAYROLL">PAYROLL</option>
-                          <option value="REQUEST_ATTACHMENT">REQUEST_ATTACHMENT</option>
-                          <option value="OTHER">OTHER</option>
-                        </select>
+                          options={[
+                            { value: "HR", label: "HR" },
+                            { value: "CONTRACT", label: "CONTRACT" },
+                            { value: "PAYROLL", label: "PAYROLL" },
+                            { value: "REQUEST_ATTACHMENT", label: "REQUEST_ATTACHMENT" },
+                            { value: "OTHER", label: "OTHER" },
+                          ]}
+                          ariaLabel={labels.documentCategory}
+                          tone="dark"
+                          fullWidth
+                        />
                       </div>
 
                       <div>
@@ -931,20 +936,24 @@ export default function EmployeeDetail({
                 <label className="mb-1 block text-sm text-stone-300">
                   {labels.documentFilterCategory}
                 </label>
-                <select
+                <AppSelect<string>
+                  id="employee-detail-doc-filter-category"
                   value={documentCategoryFilter}
-                  onChange={(e) =>
-                    setDocumentCategoryFilter(e.target.value as "ALL" | DocumentCategory)
+                  onChange={(v) =>
+                    setDocumentCategoryFilter(v as "ALL" | DocumentCategory)
                   }
-                  className="w-full rounded-lg border border-stone-600/30 bg-white/10 px-3 py-2 text-sm text-stone-200"
-                >
-                  <option value="ALL">ALL</option>
-                  <option value="HR">HR</option>
-                  <option value="CONTRACT">CONTRACT</option>
-                  <option value="PAYROLL">PAYROLL</option>
-                  <option value="REQUEST_ATTACHMENT">REQUEST_ATTACHMENT</option>
-                  <option value="OTHER">OTHER</option>
-                </select>
+                  options={[
+                    { value: "ALL", label: "ALL" },
+                    { value: "HR", label: "HR" },
+                    { value: "CONTRACT", label: "CONTRACT" },
+                    { value: "PAYROLL", label: "PAYROLL" },
+                    { value: "REQUEST_ATTACHMENT", label: "REQUEST_ATTACHMENT" },
+                    { value: "OTHER", label: "OTHER" },
+                  ]}
+                  ariaLabel={labels.documentFilterCategory}
+                  tone="dark"
+                  fullWidth
+                />
               </div>
 
               <div>
@@ -1237,6 +1246,7 @@ export default function EmployeeDetail({
           </h2>
           <div className="grid grid-cols-2 gap-4">
             <SelectField
+              fieldId="employee-detail-role"
               label={labels.role}
               name="roleId"
               value={formData.roleId || ""}
@@ -1246,6 +1256,7 @@ export default function EmployeeDetail({
               disabled={!isEditMode && !isNewEmployee}
             />
             <SelectField
+              fieldId="employee-detail-department"
               label={labels.department}
               name="departmentId"
               value={formData.departmentId || ""}
@@ -1255,6 +1266,7 @@ export default function EmployeeDetail({
               disabled={!isEditMode && !isNewEmployee}
             />
             <SelectField
+              fieldId="employee-detail-manager"
               label={labels.manager}
               name="managerId"
               value={selectedManagerId}
@@ -1269,6 +1281,7 @@ export default function EmployeeDetail({
               disabled={!isEditMode && !isNewEmployee}
             />
             <SelectField
+              fieldId="employee-detail-account-status"
               label={labels.accountStatus}
               name="accountStatus"
               value={formData.accountStatus || "ACTIVE"}
@@ -1376,6 +1389,7 @@ function InputField({
 }
 
 interface SelectFieldProps {
+  fieldId: string;
   label: string;
   name: string;
   value: string;
@@ -1386,6 +1400,7 @@ interface SelectFieldProps {
 }
 
 function SelectField({
+  fieldId,
   label,
   name,
   value,
@@ -1394,25 +1409,29 @@ function SelectField({
   placeholder,
   disabled,
 }: SelectFieldProps) {
+  const merged = placeholder
+    ? [{ value: "", label: placeholder }, ...options.map((o) => ({ value: o.id, label: o.label }))]
+    : options.map((o) => ({ value: o.id, label: o.label }));
+
   return (
     <div>
-      <label className="block text-sm font-medium text-stone-300 mb-2">
+      <label className="block text-sm font-medium text-stone-300 mb-2" htmlFor={fieldId}>
         {label}
       </label>
-      <select
-        name={name}
+      <AppSelect<string>
+        id={fieldId}
         value={value}
-        onChange={onChange}
+        onChange={(v) => {
+          onChange({
+            target: { name, value: v },
+          } as React.ChangeEvent<HTMLSelectElement>);
+        }}
+        options={merged}
+        ariaLabel={label}
+        tone="dark"
+        fullWidth
         disabled={disabled}
-        className="w-full px-3 py-2 bg-white/10 border border-stone-600/30 text-white rounded-lg focus:border-orange-500/50 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map((opt) => (
-          <option key={opt.id} value={opt.id}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      />
     </div>
   );
 }

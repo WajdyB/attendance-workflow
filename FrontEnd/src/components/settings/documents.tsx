@@ -5,6 +5,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
 import { useMemo, useRef, useState } from "react";
+import { AppSelect } from "@/components/ui/app-select";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ type DossierDocument = {
 interface DocumentsPanelProps {
   userId: string;
   initialDocuments: DossierDocument[];
+  /** When false, upload controls are hidden (read-only list). Default true. */
+  canUpload?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -141,16 +144,15 @@ function UploadModal({ userId, file, language, onClose, onSuccess }: UploadModal
             <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--text-2)" }}>
               {fr ? "Catégorie" : "Category"}
             </label>
-            <select
+            <AppSelect<string>
+              id="documents-upload-category"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-              style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-1)" }}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+              onChange={setCategory}
+              options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+              ariaLabel={fr ? "Catégorie" : "Category"}
+              tone="token"
+              fullWidth
+            />
           </div>
 
           <div>
@@ -194,7 +196,11 @@ function UploadModal({ userId, file, language, onClose, onSuccess }: UploadModal
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function DocumentsPanel({ userId, initialDocuments }: DocumentsPanelProps) {
+export default function DocumentsPanel({
+  userId,
+  initialDocuments,
+  canUpload = true,
+}: DocumentsPanelProps) {
   const { language } = useLanguage();
   const fr = language === "fr";
 
@@ -272,16 +278,18 @@ export default function DocumentsPanel({ userId, initialDocuments }: DocumentsPa
               />
             </div>
             {/* Category filter */}
-            <select
+            <AppSelect<string>
+              id="documents-toolbar-category"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-lg px-3 py-2 text-sm outline-none"
-              style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-1)" }}
-            >
-              {categories.map((c) => (
-                <option key={c} value={c}>{c === "ALL" ? (fr ? "Toutes catégories" : "All categories") : c}</option>
-              ))}
-            </select>
+              onChange={setCategory}
+              options={categories.map((c) => ({
+                value: c,
+                label: c === "ALL" ? (fr ? "Toutes catégories" : "All categories") : c,
+              }))}
+              ariaLabel={fr ? "Filtrer par catégorie" : "Filter by category"}
+              tone="token"
+              triggerClassName="min-w-[10rem]"
+            />
           </div>
 
           <div className="flex gap-2">
@@ -293,19 +301,23 @@ export default function DocumentsPanel({ userId, initialDocuments }: DocumentsPa
               {refreshing ? <Loader2 size={14} className="animate-spin" /> : null}
               {fr ? "Rafraîchir" : "Refresh"}
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="btn-primary"
-            >
-              <Upload size={14} />
-              {fr ? "Ajouter" : "Upload"}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileChosen}
-            />
+            {canUpload ? (
+              <>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-primary"
+                >
+                  <Upload size={14} />
+                  {fr ? "Ajouter" : "Upload"}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChosen}
+                />
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -325,7 +337,7 @@ export default function DocumentsPanel({ userId, initialDocuments }: DocumentsPa
             <p className="text-sm" style={{ color: "var(--text-3)" }}>
               {fr ? "Aucun document" : "No documents"}
             </p>
-            {!search && category === "ALL" && (
+            {!search && category === "ALL" && canUpload && (
               <button onClick={() => fileInputRef.current?.click()} className="btn-primary mt-1">
                 <Upload size={14} />
                 {fr ? "Ajouter le premier document" : "Upload first document"}

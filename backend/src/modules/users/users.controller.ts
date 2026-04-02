@@ -11,15 +11,19 @@ import {
   UseInterceptors,
   UploadedFile,
   UseGuards,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UsersService } from './users.service';
+import { UsersService, RequestingUser } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserPasswordDto } from './dto/update-user-password.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { RequireRoles } from '../../common/decorator/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+
+type RequestWithRequestingUser = Request & { user?: RequestingUser & Record<string, unknown> };
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -51,8 +55,10 @@ export class UsersController {
   async update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @Req() req: RequestWithRequestingUser,
   ) {
-    return this.usersService.updateUser(id, updateUserDto);
+    const requester = req.user as RequestingUser | undefined;
+    return this.usersService.updateUser(id, updateUserDto, requester);
   }
 
   @Patch(':id/password')

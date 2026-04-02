@@ -4,15 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Users, FolderKanban, FileText, Clock, Star, TrendingUp,
   TrendingDown, RefreshCw, AlertCircle, CheckCircle, XCircle,
-  Loader2, Calendar, Building2, ArrowUpRight,
+  Loader2, Calendar,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend,
 } from "recharts";
 import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
+import { DashboardSelect } from "@/components/ui/dashboard-select";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,16 +50,12 @@ interface LeaveRequest {
 interface Evaluation {
   id: string;
   globalScore?: number | null;
-  evaluationDate: string;
+  /** Legacy / alias; API uses `reviewDate` */
+  evaluationDate?: string;
+  reviewDate?: string;
+  createdAt?: string;
   evaluationType: string;
   collaborator: { user: { firstName: string; lastName: string; department?: { name: string } | null } };
-}
-
-interface DeptStat {
-  departmentName: string;
-  departmentId?: string;
-  avgScore: number | null;
-  count: number;
 }
 
 interface ProjectTotal {
@@ -72,7 +69,6 @@ interface Snapshot {
   projects: Project[];
   requests: LeaveRequest[];
   evaluations: Evaluation[];
-  deptStats: DeptStat[];
   projectTotals: ProjectTotal[];
 }
 
@@ -97,13 +93,69 @@ const PROJ_STATUS_META: Record<string, { label: string; color: string }> = {
 
 const FR_MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 
+const FR_MONTHS_LONG = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+/**
+ * Prefer review/evaluation date; fall back to `createdAt` when `reviewDate` is null
+ * (common in DB). Use UTC for calendar month so date-only API values don’t shift by timezone.
+ */
+function getEvalDate(ev: Evaluation): Date | null {
+  const raw = ev.evaluationDate ?? ev.reviewDate ?? ev.createdAt;
+  if (raw == null || raw === "") return null;
+  const d = new Date(raw as string);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** True if `d` falls in calendar month `m` (1–12) of `y` (UTC — matches `@db.Date` payloads). */
+function dateInUtcYearMonth(d: Date, y: number, m: number): boolean {
+  return d.getUTCFullYear() === y && d.getUTCMonth() + 1 === m;
+}
+
+function dateInYearMonth(iso: string | undefined, y: number, m: number): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return false;
+  return d.getFullYear() === y && d.getMonth() + 1 === m;
+}
+
+function requestInSelectedMonth(r: LeaveRequest, y: number, m: number): boolean {
+  return dateInYearMonth(r.leaveStartDate ?? r.createdAt, y, m);
+}
+
+function buildDeptPerfFromEvaluations(evaluations: Evaluation[], y: number, m: number) {
+  const filtered = evaluations.filter((e) => {
+    const d = getEvalDate(e);
+    if (!d || e.globalScore == null) return false;
+    return dateInUtcYearMonth(d, y, m);
+  });
+  const map = new Map<string, { sum: number; n: number }>();
+  for (const e of filtered) {
+    const dept = e.collaborator?.user?.department?.name ?? "N/A";
+    const sc = Number(e.globalScore ?? 0);
+    const cur = map.get(dept) ?? { sum: 0, n: 0 };
+    cur.sum += sc;
+    cur.n += 1;
+    map.set(dept, cur);
+  }
+  return Array.from(map.entries())
+    .map(([dept, { sum, n }]) => ({
+      dept: dept.length > 12 ? dept.slice(0, 10) + "…" : dept,
+      score: Math.round((sum / n) * 10) / 10,
+      count: n,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+}
+
 function pct(value: number, total: number) {
   return total === 0 ? 0 : Math.round((value / total) * 100);
 }
 
 /** Group requests by month for the area chart */
-function buildMonthlyRequestTrend(requests: LeaveRequest[]) {
-  const year = new Date().getFullYear();
+function buildMonthlyRequestTrend(requests: LeaveRequest[], year: number) {
   const byMonth: Record<number, { approved: number; rejected: number; pending: number }> = {};
   for (let m = 1; m <= 12; m++) byMonth[m] = { approved: 0, rejected: 0, pending: 0 };
 
@@ -192,7 +244,8 @@ function KpiCard({
 function ScoreKpiCard({ avgScore, evalCount }: { avgScore: string | number; evalCount: number }) {
   const hasScore = avgScore !== "—" && avgScore !== null;
   const numericScore = hasScore ? Number(avgScore) : 0;
-  const pct = Math.round((numericScore / 5) * 100);
+  const pct =
+    numericScore <= 5.5 ? Math.round((numericScore / 5) * 100) : Math.round(Math.min(100, numericScore));
   const color = pct >= 80 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "#ef4444";
 
   return (
@@ -204,14 +257,6 @@ function ScoreKpiCard({ avgScore, evalCount }: { avgScore: string | number; eval
         >
           <Star size={16} />
         </div>
-        {hasScore && (
-          <div
-            className="h-1.5 w-12 rounded-full overflow-hidden"
-            style={{ background: "var(--border)" }}
-          >
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-          </div>
-        )}
       </div>
       <div>
         <p className="stat-label">Performance moy.</p>
@@ -239,33 +284,53 @@ export default function AdminDashboard() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
 
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const yearOptions = (() => {
+    const y = now.getFullYear();
+    const out: number[] = [];
+    for (let i = y; i >= y - 5; i--) out.push(i);
+    return out;
+  })();
+
+  const monthSelectOptions = FR_MONTHS.map((label, i) => ({
+    value: i + 1,
+    label,
+  }));
+  const yearSelectOptions = yearOptions.map((y) => ({
+    value: y,
+    label: String(y),
+  }));
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [
-        usersRes, projectsRes, requestsRes,
-        evalsRes, deptStatsRes, projectTotalsRes,
-      ] = await Promise.allSettled([
-        apiClient.get<UserRow[]>(apiConfig.endpoints.users.all),
-        apiClient.get<Project[]>(apiConfig.endpoints.projects.all()),
-        apiClient.get<LeaveRequest[]>(apiConfig.endpoints.requests.allForAdmin),
-        apiClient.get<Evaluation[]>(apiConfig.endpoints.evaluations.all()),
-        apiClient.get<DeptStat[]>(apiConfig.endpoints.evaluations.departmentStats(year)),
-        apiClient.get<ProjectTotal[]>(apiConfig.endpoints.timesheets.projectTotals(year, month)),
-      ]);
+      const [usersRes, projectsRes, requestsRes, evalsRes] =
+        await Promise.allSettled([
+          apiClient.get<UserRow[]>(apiConfig.endpoints.users.all),
+          apiClient.get<Project[]>(apiConfig.endpoints.projects.all()),
+          apiClient.get<LeaveRequest[]>(apiConfig.endpoints.requests.allForAdmin),
+          apiClient.get<Evaluation[]>(apiConfig.endpoints.evaluations.all()),
+        ]);
+
+      let projectTotals: ProjectTotal[] = [];
+      try {
+        const res = await apiClient.get<ProjectTotal[]>(
+          apiConfig.endpoints.timesheets.projectTotals(selectedYear, selectedMonth),
+        );
+        projectTotals = Array.isArray(res) ? res : [];
+      } catch {
+        projectTotals = [];
+      }
 
       setSnapshot({
         employees:     usersRes.status === "fulfilled" ? usersRes.value : [],
         projects:      projectsRes.status === "fulfilled" ? projectsRes.value : [],
         requests:      requestsRes.status === "fulfilled" ? requestsRes.value : [],
         evaluations:   evalsRes.status === "fulfilled" ? evalsRes.value : [],
-        deptStats:     deptStatsRes.status === "fulfilled" ? deptStatsRes.value : [],
-        projectTotals: projectTotalsRes.status === "fulfilled" ? projectTotalsRes.value : [],
+        projectTotals,
       });
       setLastRefresh(new Date());
     } catch (e) {
@@ -273,7 +338,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [selectedYear, selectedMonth]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -287,16 +352,24 @@ export default function AdminDashboard() {
 
   const s = snapshot!;
 
-  // ── Derived KPIs ──────────────────────────────────────────────────────────
+  const periodLabel = `${FR_MONTHS_LONG[selectedMonth - 1]} ${selectedYear}`;
+  const requestsInPeriod = s.requests.filter((r) => requestInSelectedMonth(r, selectedYear, selectedMonth));
+
+  // ── Derived KPIs (scoped to selected month) ───────────────────────────────
 
   const totalEmployees = s.employees.length;
   const activeProjects = s.projects.filter((p) => p.status === "IN_PROGRESS").length;
-  const pendingRequests = s.requests.filter((r) => r.status === "PENDING").length;
-  const approvedRequests = s.requests.filter((r) => r.status === "APPROVED").length;
-  const rejectedRequests = s.requests.filter((r) => r.status === "REJECTED").length;
-  const totalRequests = s.requests.length;
+  const pendingRequests = requestsInPeriod.filter((r) => r.status === "PENDING").length;
+  const approvedRequests = requestsInPeriod.filter((r) => r.status === "APPROVED").length;
+  const rejectedRequests = requestsInPeriod.filter((r) => r.status === "REJECTED").length;
+  const totalRequests = requestsInPeriod.length;
 
-  const scoredEvals = s.evaluations.filter((e) => e.globalScore != null);
+  const evalsInPeriod = s.evaluations.filter((e) => {
+    const d = getEvalDate(e);
+    if (!d) return false;
+    return dateInUtcYearMonth(d, selectedYear, selectedMonth);
+  });
+  const scoredEvals = evalsInPeriod.filter((e) => e.globalScore != null);
   const avgScore =
     scoredEvals.length > 0
       ? (scoredEvals.reduce((sum, e) => sum + Number(e.globalScore ?? 0), 0) / scoredEvals.length).toFixed(1)
@@ -306,7 +379,7 @@ export default function AdminDashboard() {
 
   // ── Chart Data ────────────────────────────────────────────────────────────
 
-  const monthlyRequestData = buildMonthlyRequestTrend(s.requests);
+  const monthlyRequestData = buildMonthlyRequestTrend(s.requests, selectedYear);
 
   const projectStatusData = [
     { name: "En cours",  value: s.projects.filter((p) => p.status === "IN_PROGRESS").length, color: "#f97316" },
@@ -321,32 +394,29 @@ export default function AdminDashboard() {
     .slice(0, 8)
     .map((pt) => ({ name: pt.projectName.length > 18 ? pt.projectName.slice(0, 16) + "…" : pt.projectName, hours: pt.totalHours }));
 
-  const deptPerfData = s.deptStats
-    .filter((d) => d.avgScore != null && Number(d.avgScore) > 0)
-    .sort((a, b) => Number(b.avgScore ?? 0) - Number(a.avgScore ?? 0))
-    .slice(0, 6)
-    .map((d) => ({
-      dept: (d.departmentName ?? "").length > 12 ? (d.departmentName ?? "").slice(0, 10) + "…" : (d.departmentName ?? "N/A"),
-      score: Number(Number(d.avgScore ?? 0).toFixed(1)),
-      count: d.count,
-    }));
+  const deptPerfData = buildDeptPerfFromEvaluations(s.evaluations, selectedYear, selectedMonth);
 
   const leaveTypeData = (() => {
     const map: Record<string, number> = {};
-    s.requests.filter((r) => r.status === "APPROVED").forEach((r) => {
-      map[r.leaveType] = (map[r.leaveType] ?? 0) + 1;
+    requestsInPeriod.filter((r) => r.status === "APPROVED").forEach((r) => {
+      const key = r.leaveType ?? "OTHER";
+      map[key] = (map[key] ?? 0) + 1;
     });
     return Object.entries(map).map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }));
   })();
 
-  // ── Recent items ──────────────────────────────────────────────────────────
+  // ── Recent items (selected month) ─────────────────────────────────────────
 
-  const recentRequests = [...s.requests]
+  const recentRequests = [...requestsInPeriod]
     .sort((a, b) => new Date(b.leaveStartDate ?? b.createdAt).getTime() - new Date(a.leaveStartDate ?? a.createdAt).getTime())
     .slice(0, 6);
 
-  const recentEvals = [...s.evaluations]
-    .sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime())
+  const recentEvals = [...evalsInPeriod]
+    .sort((a, b) => {
+      const tb = getEvalDate(b)?.getTime() ?? 0;
+      const ta = getEvalDate(a)?.getTime() ?? 0;
+      return tb - ta;
+    })
     .slice(0, 5);
 
   const upcomingProjects = s.projects
@@ -365,14 +435,38 @@ export default function AdminDashboard() {
     <div className="space-y-6">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="page-title">Tableau de bord</h1>
           <p className="page-subtitle">
-            Vue d'ensemble · {now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            Vue d'ensemble · données pour <span className="font-medium" style={{ color: "var(--text-2)" }}>{periodLabel}</span>
+          </p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-3)" }}>
+            Aujourd&apos;hui : {now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div
+            className="flex items-center gap-2 rounded-xl border px-2 py-1.5"
+            style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}
+          >
+            <Calendar size={14} style={{ color: "var(--text-3)", flexShrink: 0 }} />
+            <DashboardSelect
+              id="admin-dash-month"
+              value={selectedMonth}
+              onChange={setSelectedMonth}
+              options={monthSelectOptions}
+              ariaLabel="Mois"
+              triggerClassName="max-w-[120px]"
+            />
+            <DashboardSelect
+              id="admin-dash-year"
+              value={selectedYear}
+              onChange={setSelectedYear}
+              options={yearSelectOptions}
+              ariaLabel="Année"
+            />
+          </div>
           <span className="text-xs" style={{ color: "var(--text-3)" }}>
             Mis à jour {lastRefresh.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
           </span>
@@ -395,7 +489,12 @@ export default function AdminDashboard() {
         <KpiCard label="Congés en attente" value={pendingRequests} icon={<FileText size={16} />} color="#eab308" />
         <KpiCard label="Congés approuvés" value={approvedRequests} icon={<CheckCircle size={16} />} color="#22c55e" />
         <ScoreKpiCard avgScore={avgScore} evalCount={scoredEvals.length} />
-        <KpiCard label={`Heures ${FR_MONTHS[month - 1]}`} value={`${totalHoursThisMonth}h`} icon={<Clock size={16} />} color="#06b6d4" />
+        <KpiCard
+          label={`Heures ${FR_MONTHS[selectedMonth - 1]}`}
+          value={`${totalHoursThisMonth}h`}
+          icon={<Clock size={16} />}
+          color="#06b6d4"
+        />
       </div>
 
       {/* ── Request trend + Project status ──────────────────────────────────── */}
@@ -405,7 +504,7 @@ export default function AdminDashboard() {
         <div style={cardStyle} className="lg:col-span-2">
           <SectionHeader
             title="Tendance des congés"
-            subtitle={`Demandes par mois — ${year}`}
+            subtitle={`Demandes par mois — ${selectedYear} (année complète)`}
           />
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={monthlyRequestData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -437,7 +536,10 @@ export default function AdminDashboard() {
 
         {/* Pie chart - project status */}
         <div style={cardStyle}>
-          <SectionHeader title="Statut des projets" subtitle={`${s.projects.length} projets total`} />
+          <SectionHeader
+            title="Statut des projets"
+            subtitle={`${s.projects.length} projets — vue globale (hors période)`}
+          />
           {projectStatusData.length === 0 ? (
             <div className="empty-state" style={{ padding: "40px 0" }}><p className="text-xs">Aucun projet</p></div>
           ) : (
@@ -483,7 +585,7 @@ export default function AdminDashboard() {
         <div style={cardStyle}>
           <SectionHeader
             title="Heures par projet"
-            subtitle={`${FR_MONTHS[month - 1]} ${year} — Top 8 projets`}
+            subtitle={`${FR_MONTHS[selectedMonth - 1]} ${selectedYear} — Top 8 projets`}
           />
           {hoursChartData.length === 0 ? (
             <div className="empty-state" style={{ padding: "40px 0" }}><p className="text-xs">Aucune donnée</p></div>
@@ -504,7 +606,7 @@ export default function AdminDashboard() {
         <div style={cardStyle}>
           <SectionHeader
             title="Effectif par département"
-            subtitle={`${totalEmployees} employés au total`}
+            subtitle={`${totalEmployees} employés — structure actuelle`}
           />
           {deptHeadcount.length === 0 ? (
             <div className="empty-state" style={{ padding: "40px 0" }}><p className="text-xs">Aucune donnée</p></div>
@@ -533,10 +635,17 @@ export default function AdminDashboard() {
         <div style={cardStyle}>
           <SectionHeader
             title="Score de performance par département"
-            subtitle={`Évaluations ${year} — note /5`}
+            subtitle={`${periodLabel} — moyenne sur 100 (${deptPerfData.reduce((s, d) => s + d.count, 0)} éval.)`}
           />
           {deptPerfData.length === 0 ? (
-            <div className="empty-state" style={{ padding: "40px 0" }}><p className="text-xs">Aucune évaluation</p></div>
+            <div className="empty-state" style={{ padding: "40px 0" }}>
+              <p className="text-xs">Aucune évaluation pour ce mois (notes globales requises).</p>
+              {s.evaluations.length > 0 ? (
+                <p className="text-xs mt-2 max-w-sm mx-auto" style={{ color: "var(--text-3)" }}>
+                  {s.evaluations.length} évaluation(s) au total chargée(s) — essayez un autre mois ou une autre année.
+                </p>
+              ) : null}
+            </div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={deptPerfData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -567,7 +676,7 @@ export default function AdminDashboard() {
         <div style={cardStyle}>
           <SectionHeader
             title="Types de congés approuvés"
-            subtitle={`${approvedRequests} congés approuvés au total`}
+            subtitle={`${approvedRequests} approuvé${approvedRequests !== 1 ? "s" : ""} sur la période`}
           />
           {leaveTypeData.length === 0 ? (
             <div className="empty-state" style={{ padding: "40px 0" }}><p className="text-xs">Aucun congé approuvé</p></div>
@@ -657,13 +766,23 @@ export default function AdminDashboard() {
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
             <h3 className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>Évaluations récentes</h3>
-            <p className="text-xs" style={{ color: "var(--text-3)" }}>Score moyen : {avgScore}/5</p>
+            <p className="text-xs" style={{ color: "var(--text-3)" }}>
+              Score moyen (période) : {avgScore !== "—" ? `${avgScore} / 100` : "—"}
+            </p>
           </div>
           <div>
             {recentEvals.length === 0 ? (
-              <div className="empty-state"><p className="text-xs">Aucune évaluation</p></div>
+              <div className="empty-state">
+                <p className="text-xs">Aucune évaluation pour ce mois.</p>
+                {s.evaluations.length > 0 ? (
+                  <p className="text-xs mt-2 px-4" style={{ color: "var(--text-3)" }}>
+                    D’autres mois contiennent des évaluations — ajustez la période ci-dessus.
+                  </p>
+                ) : null}
+              </div>
             ) : recentEvals.map((ev, i) => {
               const score = ev.globalScore ?? null;
+              const evDate = getEvalDate(ev);
               const scoreColor = score == null ? "var(--text-3)" : score >= 75 ? "#4ade80" : score >= 50 ? "#fbbf24" : "#f87171";
               return (
                 <div
@@ -678,7 +797,11 @@ export default function AdminDashboard() {
                       {ev.collaborator.user.firstName} {ev.collaborator.user.lastName}
                     </p>
                     <p className="text-[11px]" style={{ color: "var(--text-3)" }}>
-                      {ev.evaluationType} · {new Date(ev.evaluationDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
+                      {ev.evaluationType}
+                      {" · "}
+                      {evDate
+                        ? evDate.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })
+                        : "—"}
                     </p>
                   </div>
                   <span
@@ -768,7 +891,7 @@ export default function AdminDashboard() {
         <div className="flex items-center gap-2">
           <Clock size={14} style={{ color: "#06b6d4" }} />
           <span className="text-xs" style={{ color: "var(--text-2)" }}>
-            <span className="font-semibold" style={{ color: "#06b6d4" }}>{totalHoursThisMonth}h</span> loggées ce mois
+            <span className="font-semibold" style={{ color: "#06b6d4" }}>{totalHoursThisMonth}h</span> loggées ({periodLabel})
           </span>
         </div>
       </div>

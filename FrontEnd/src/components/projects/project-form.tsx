@@ -6,6 +6,7 @@ import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
 import { Project, ProjectStatus, STATUS_META } from "./types";
 import { useLanguage } from "@/context/LanguageContext";
+import { AppSelect } from "@/components/ui/app-select";
 
 interface UserOption {
   id: string;
@@ -242,18 +243,21 @@ export default function ProjectForm({ onClose, onSuccess, editProject, users = [
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
                 {t("Chef de projet", "Project lead")}
               </label>
-              <select
+              <AppSelect<string>
+                id="project-form-lead"
                 value={leadId}
-                onChange={(e) => setLeadId(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
-              >
-                <option value="">{t("— Aucun chef de projet —", "— No project lead —")}</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.firstName} {u.lastName}
-                  </option>
-                ))}
-              </select>
+                onChange={setLeadId}
+                options={[
+                  { value: "", label: t("— Aucun chef de projet —", "— No project lead —") },
+                  ...users.map((u) => ({
+                    value: u.id,
+                    label: `${u.firstName} ${u.lastName}`,
+                  })),
+                ]}
+                ariaLabel={t("Chef de projet", "Project lead")}
+                tone="default"
+                fullWidth
+              />
             </div>
           )}
         </div>
