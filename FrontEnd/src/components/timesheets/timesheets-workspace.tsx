@@ -100,23 +100,56 @@ function getMonday(d: Date) {
   return monday;
 }
 
-function toISO(d: Date) { return d.toISOString().slice(0, 10); }
-function getTodayDate() { return toISO(new Date()); }
-function getDefaultWeekStart() { return toISO(getMonday(new Date())); }
+/** Parse YYYY-MM-DD as a local calendar date (avoids UTC-only interpretation of `new Date("...")`). */
+function parseLocalDate(dateStr: string): Date {
+  const raw = (dateStr ?? "").trim();
+  if (!raw) return new Date(NaN);
+  // API often returns full ISO strings (e.g. 2026-04-06T00:00:00.000Z) — only the date part is valid for split("-").
+  const isoDate = raw.length >= 10 ? raw.slice(0, 10) : raw;
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return new Date(NaN);
+  }
+  return new Date(y, m - 1, d);
+}
+
+/** Format YYYY-MM-DD in local time (UTC `toISOString()` can shift the calendar day). */
+function formatLocalDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
+}
+
+function getTodayDate() {
+  return formatLocalDateISO(new Date());
+}
+
+function getDefaultWeekStart() {
+  return formatLocalDateISO(getMonday(new Date()));
+}
 
 function addWeeks(dateStr: string, n: number) {
-  const d = new Date(dateStr);
+  const d = parseLocalDate(dateStr);
   d.setDate(d.getDate() + n * 7);
-  return toISO(d);
+  return formatLocalDateISO(d);
 }
 
 function fmtDateFR(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  const d = parseLocalDate(dateStr);
+  if (Number.isNaN(d.getTime())) {
+    return (dateStr ?? "").trim() || "—";
+  }
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function weekRangeLabel(weekStart: string) {
-  const start = new Date(weekStart);
-  const end = new Date(weekStart);
+  const start = parseLocalDate(weekStart);
+  const end = parseLocalDate(weekStart);
   end.setDate(start.getDate() + 6);
   const opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" };
   return `${start.toLocaleDateString("fr-FR", opts)} – ${end.toLocaleDateString("fr-FR", opts)}`;
@@ -720,7 +753,8 @@ function ManagerTimesheets({ userId, t }: { userId: string; t: (k: string) => st
 // COLLABORATOR VIEW
 // ══════════════════════════════════════════════════════════════════════════════
 
-const FR_DAY_NAMES   = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+/** Local weekday names (getDay(): 0=Sun … 6=Sat) — use for labels, not positional Mon–Fri index. */
+const FR_DAY_NAMES_ALL = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const FR_MONTH_SHORT = ["jan.","fév.","mars","avr.","mai","juin","juil.","août","sep.","oct.","nov.","déc."];
 
 interface DraftEntry {
@@ -868,13 +902,14 @@ function CollaboratorTimesheets({ userId, t }: { userId: string; t: (k: string) 
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const weekDays = useMemo(() => Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(weekStart);
+    const d = parseLocalDate(weekStart);
     d.setDate(d.getDate() + i);
-    const dateStr = toISO(d);
+    const dateStr = formatLocalDateISO(d);
+    const dayName = FR_DAY_NAMES_ALL[d.getDay()];
     return {
       dateStr,
-      label: `${FR_DAY_NAMES[i]} ${d.getDate()} ${FR_MONTH_SHORT[d.getMonth()]}`,
-      shortLabel: FR_DAY_NAMES[i],
+      label: `${dayName} ${d.getDate()} ${FR_MONTH_SHORT[d.getMonth()]}`,
+      shortLabel: dayName,
       isToday: dateStr === getTodayDate(),
     };
   }), [weekStart]);

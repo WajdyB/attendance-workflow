@@ -29,6 +29,7 @@ const translations: Record<Language, Record<string, string>> = {
     "auth.login.fillAll": "Veuillez remplir tous les champs",
     "auth.login.network": "Erreur réseau. Vérifiez votre connexion.",
     "auth.login.invalidResponse": "Le point de connexion a renvoyé une réponse non JSON. Vérifiez NEXT_PUBLIC_API_URL (actuel : {baseUrl}).",
+    "auth.login.subtitle": "Plateforme de gestion RH",
 
     "auth.forgot.title": "Mot de passe oublié ?",
     "auth.forgot.subtitle": "Pas de souci, nous allons vous envoyer des instructions de réinitialisation.",
@@ -201,6 +202,8 @@ const translations: Record<Language, Record<string, string>> = {
     "landing.login": "Connexion",
     "landing.getStarted": "Commencer",
     "landing.brand": "RHpro",
+    "landing.themeLight": "Activer le mode clair",
+    "landing.themeDark": "Activer le mode sombre",
   },
   en: {
     "common.french": "FR",
@@ -218,6 +221,7 @@ const translations: Record<Language, Record<string, string>> = {
     "auth.login.fillAll": "Please fill in all fields",
     "auth.login.network": "Network error. Please check your connection.",
     "auth.login.invalidResponse": "Login endpoint returned non-JSON response. Check NEXT_PUBLIC_API_URL (current: {baseUrl}).",
+    "auth.login.subtitle": "HR management platform",
 
     "auth.forgot.title": "Forgot password?",
     "auth.forgot.subtitle": "No worries, we’ll send you reset instructions.",
@@ -390,6 +394,8 @@ const translations: Record<Language, Record<string, string>> = {
     "landing.login": "Login",
     "landing.getStarted": "Get Started",
     "landing.brand": "RHpro",
+    "landing.themeLight": "Use light mode",
+    "landing.themeDark": "Use dark mode",
   },
 };
 

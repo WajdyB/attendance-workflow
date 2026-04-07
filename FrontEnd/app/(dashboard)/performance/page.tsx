@@ -161,6 +161,15 @@ export default function PerformancePage() {
       : [{ key: "reports" as Tab, icon: <TrendingUp size={15} />, fr: "Mon évolution", en: "My Trend" }]),
   ];
 
+  // Prisma Decimal often arrives as string; Number() avoids "85" + "90" → "8590" in averages.
+  const numericScores = evaluations
+    .map((e) => Number(e.globalScore))
+    .filter((n) => Number.isFinite(n));
+  const avgGlobalScore =
+    numericScores.length > 0
+      ? numericScores.reduce((a, b) => a + b, 0) / numericScores.length
+      : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -197,18 +206,16 @@ export default function PerformancePage() {
           <div className="stat-card">
             <p className="stat-label">{tl("Note moyenne", "Avg score")}</p>
             <p className="stat-value">
-              {evaluations.filter((e) => e.globalScore != null).length > 0
-                ? (
-                    evaluations.reduce((sum, e) => sum + (e.globalScore ?? 0), 0) /
-                    evaluations.filter((e) => e.globalScore != null).length
-                  ).toFixed(1)
-                : "—"}
+              {avgGlobalScore != null ? avgGlobalScore.toFixed(1) : "—"}
             </p>
           </div>
           <div className="stat-card">
             <p className="stat-label">{tl("≥ 85 (excellent)", "≥ 85 (excellent)")}</p>
             <p className="stat-value" style={{ color: "var(--success)" }}>
-              {evaluations.filter((e) => (e.globalScore ?? 0) >= 85).length}
+              {evaluations.filter((e) => {
+                const n = Number(e.globalScore);
+                return Number.isFinite(n) && n >= 85;
+              }).length}
             </p>
           </div>
           <div className="stat-card">

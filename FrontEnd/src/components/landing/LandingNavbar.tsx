@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "../layout/language-switcher";
+import ThemeToggle from "../layout/theme-toggle";
 
 export default function LandingNavbar() {
   const { t } = useLanguage();
@@ -69,6 +70,7 @@ export default function LandingNavbar() {
         </ul>
 
         <div className="hidden items-center gap-3 md:flex">
+          <ThemeToggle />
           <LanguageSwitcher compact />
           <Link
             href="/auth/login"
@@ -107,7 +109,8 @@ export default function LandingNavbar() {
                 {item.label}
               </a>
             ))}
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <ThemeToggle />
               <LanguageSwitcher compact />
               <Link
                 href="/auth/login"

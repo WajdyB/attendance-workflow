@@ -35,6 +35,38 @@
   --separator: var(--border);
 }
 
+/* Light theme — toggled via <html class="light"> */
+html.light {
+  --bg:              #faf9f7;
+  --surface:         #ffffff;
+  --surface-raised:  #f5f4f1;
+  --surface-overlay: #ffffff;
+
+  --border:          rgba(0, 0, 0, 0.08);
+  --border-strong:   rgba(0, 0, 0, 0.12);
+
+  --accent:          #ea580c;
+  --accent-hover:    #c2410c;
+  --accent-dim:      rgba(234, 88, 12, 0.12);
+  --accent-dim-hover:rgba(234, 88, 12, 0.2);
+
+  --text-1: #1c1917;
+  --text-2: #57534e;
+  --text-3: #78716c;
+
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --danger:  #dc2626;
+  --info:    #2563eb;
+
+  --background: var(--bg);
+  --foreground: var(--text-1);
+  --panel: var(--surface);
+  --muted: var(--text-2);
+  --accent-strong: var(--accent);
+  --separator: var(--border);
+}
+
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text-1);
@@ -63,6 +95,9 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+html.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
+html.light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
 
 /* ─────────────────────────────────────────────────────────────
    Tailwind Override Shims
@@ -122,6 +157,11 @@ body {
 [class*="shadow-lg"],
 [class*="shadow-xl"]  { box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px var(--border-strong) !important; }
 
+html.light [class*="shadow-sm"]  { box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px var(--border) !important; }
+html.light [class*="shadow-md"]  { box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px var(--border) !important; }
+html.light [class*="shadow-lg"],
+html.light [class*="shadow-xl"]  { box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px var(--border-strong) !important; }
+
 /* Form elements */
 input, select, textarea {
   color: var(--text-1) !important;
@@ -133,6 +173,17 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--accent) !important;
   outline: none !important;
   box-shadow: 0 0 0 3px var(--accent-dim) !important;
+}
+
+/* Composite fields (icon + input): focus ring lives on the wrapper (.auth-input-shell), not the inner input */
+.auth-input-shell input,
+.auth-input-shell input:focus,
+.auth-input-shell input:focus-visible {
+  background-color: transparent !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* Inline period trigger (flat inside pill); list panel is custom in component */
@@ -182,11 +233,17 @@ button { transition: background-color 0.15s ease, color 0.15s ease, border-color
   border-radius: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
+html.light .card {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px var(--border);
+}
 .card-raised {
   background: var(--surface-raised);
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+html.light .card-raised {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px var(--border-strong);
 }
 
 /* Buttons */
@@ -287,6 +344,7 @@ button { transition: background-color 0.15s ease, color 0.15s ease, border-color
 }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+html.light .data-table tr:hover td { background: rgba(0,0,0,0.03); }
 
 /* Tab bar */
 .tab-bar { display: flex; border-bottom: 1px solid var(--border); gap: 0; }

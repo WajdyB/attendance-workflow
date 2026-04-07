@@ -117,7 +117,7 @@ export default function LoginPage() {
               Connexion à RHpro
             </h1>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>
-              {t("auth.login.subtitle") || "Plateforme de gestion RH"}
+              {t("auth.login.subtitle")}
             </p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function LoginPage() {
               {t("auth.login.email")}
             </label>
             <div
-              className="flex items-center rounded-xl px-3 py-2.5 gap-2"
+              className="auth-input-shell flex items-center rounded-xl px-3 py-2.5 gap-2 transition-[box-shadow,border-color] outline-none focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_45%,transparent)] focus-within:border-[var(--accent)]"
               style={{
                 background: "var(--surface-raised)",
                 border: "1px solid var(--border-strong)",
@@ -156,8 +156,9 @@ export default function LoginPage() {
               <input
                 type="email"
                 placeholder="name@company.com"
-                className="w-full bg-transparent text-sm outline-none"
-                style={{ border: "none !important", boxShadow: "none !important", background: "transparent !important" }}
+                autoComplete="email"
+                className="w-full min-w-0 bg-transparent text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none ring-0 focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0"
+                style={{ border: "none", boxShadow: "none", background: "transparent" }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
@@ -181,7 +182,7 @@ export default function LoginPage() {
               </Link>
             </div>
             <div
-              className="flex items-center rounded-xl px-3 py-2.5 gap-2"
+              className="auth-input-shell flex items-center rounded-xl px-3 py-2.5 gap-2 transition-[box-shadow,border-color] outline-none focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_45%,transparent)] focus-within:border-[var(--accent)]"
               style={{
                 background: "var(--surface-raised)",
                 border: "1px solid var(--border-strong)",
@@ -191,8 +192,9 @@ export default function LoginPage() {
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
-                className="w-full bg-transparent text-sm outline-none flex-1"
-                style={{ border: "none !important", boxShadow: "none !important", background: "transparent !important" }}
+                autoComplete="current-password"
+                className="w-full min-w-0 flex-1 bg-transparent text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none ring-0 focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0"
+                style={{ border: "none", boxShadow: "none", background: "transparent" }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}

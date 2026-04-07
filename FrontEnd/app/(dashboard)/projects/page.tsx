@@ -20,6 +20,11 @@ interface UserOption {
   lastName: string;
 }
 
+function isAdminOrManagerRole(roleDescription: string | undefined | null): boolean {
+  const r = (roleDescription ?? "").toLowerCase();
+  return r.includes("admin") || r.includes("manager");
+}
+
 export default function ProjectsPage() {
   const { databaseUser, isLoading: authLoading } = useAuth();
   const { language, t } = useLanguage();
@@ -72,11 +77,16 @@ export default function ProjectsPage() {
           apiConfig.endpoints.users.all
         );
         const list = Array.isArray(data) ? data : (data as any).data ?? [];
-        setUsers(list.map((u: any) => ({
-          id: u.id,
-          firstName: u.firstName,
-          lastName: u.lastName,
-        })));
+        const leadEligible = list.filter((u: any) =>
+          isAdminOrManagerRole(u.role?.description),
+        );
+        setUsers(
+          leadEligible.map((u: any) => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+          })),
+        );
       } catch {
         // ignore
       }

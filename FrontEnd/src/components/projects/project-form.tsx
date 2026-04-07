@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { apiClient } from "@/utils/api-client";
 import { apiConfig } from "@/utils/api-config";
@@ -41,6 +41,22 @@ export default function ProjectForm({ onClose, onSuccess, editProject, users = [
   const [leadId, setLeadId] = useState(editProject?.leadId ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Only ADMIN/MANAGER from parent; when editing, keep current lead visible even if legacy collaborator. */
+  const leadPickerUsers = useMemo(() => {
+    const base = [...users];
+    if (editProject?.leadId && editProject.lead) {
+      const has = base.some((u) => u.id === editProject.leadId);
+      if (!has) {
+        base.unshift({
+          id: editProject.leadId,
+          firstName: editProject.lead.firstName,
+          lastName: editProject.lead.lastName,
+        });
+      }
+    }
+    return base;
+  }, [users, editProject?.leadId, editProject?.lead]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -238,7 +254,7 @@ export default function ProjectForm({ onClose, onSuccess, editProject, users = [
           </div>
 
           {/* Lead */}
-          {users.length > 0 && (
+          {leadPickerUsers.length > 0 && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
                 {t("Chef de projet", "Project lead")}
@@ -249,7 +265,7 @@ export default function ProjectForm({ onClose, onSuccess, editProject, users = [
                 onChange={setLeadId}
                 options={[
                   { value: "", label: t("— Aucun chef de projet —", "— No project lead —") },
-                  ...users.map((u) => ({
+                  ...leadPickerUsers.map((u) => ({
                     value: u.id,
                     label: `${u.firstName} ${u.lastName}`,
                   })),
