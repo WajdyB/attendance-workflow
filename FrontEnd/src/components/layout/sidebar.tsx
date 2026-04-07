@@ -83,20 +83,27 @@ export default function Sidebar() {
       style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}
       className="relative z-40 flex h-screen w-64 flex-shrink-0 flex-col"
     >
-      <div
-        className="flex flex-shrink-0 items-center gap-3 border-b px-5 py-5"
+      {/* h-16 matches DashboardHeader — one continuous top bar; logo + wordmark fill the row */}
+      <Link
+        href="/dashboard"
+        className="flex h-16 w-full shrink-0 items-center gap-3 border-b px-4 md:px-5"
         style={{ borderColor: "var(--border)" }}
       >
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-lg"
-          style={{ background: "var(--accent-dim)" }}
+        <Image
+          src="/logos/logo.png"
+          alt=""
+          width={48}
+          height={48}
+          className="h-12 w-12 shrink-0 object-contain"
+          priority
+        />
+        <span
+          className="min-w-0 flex-1 text-3xl font-semibold leading-none tracking-tight"
+          style={{ color: "var(--text-1)" }}
         >
-          <Image src="/logos/logo.svg" alt="RHpro" width={18} height={18} />
-        </div>
-        <span className="text-base font-semibold" style={{ color: "var(--text-1)" }}>
           RHpro
         </span>
-      </div>
+      </Link>
 
       <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
         {navItems.map(({ label, href, icon: Icon }) => {

@@ -209,7 +209,7 @@ export default function DashboardHeader() {
   return (
     <header
       ref={headerRef}
-      className="flex flex-shrink-0 items-center justify-end gap-2 border-b px-6 py-3 md:px-8 md:py-3.5"
+      className="flex h-16 flex-shrink-0 items-center justify-end gap-2 border-b px-6 md:px-8"
       style={{
         background: "var(--bg)",
         borderColor: "var(--border)",

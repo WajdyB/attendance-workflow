@@ -603,8 +603,8 @@ export default function LandingPage() {
           <div>
             <div className="flex items-center gap-2">
               <Image 
-                src="/logos/mafrah.png" 
-                alt="Mafrah Logo" 
+                src="/logos/logo.png"
+                alt="RHpro" 
                 width={32} 
                 height={32}
                 className="h-8 w-8 rounded-lg object-cover"

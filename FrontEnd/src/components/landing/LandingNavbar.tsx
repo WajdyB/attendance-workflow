@@ -45,8 +45,8 @@ export default function LandingNavbar() {
       <nav className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 md:px-8">
         <a href="#top" className="flex items-center gap-2">
           <Image 
-            src="/logos/mafrah.png" 
-            alt="Mafrah Logo" 
+            src="/logos/logo.png"
+            alt="RHpro" 
             width={40} 
             height={40}
             className="h-10 w-10 rounded-lg object-cover"

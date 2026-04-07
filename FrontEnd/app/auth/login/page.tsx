@@ -110,7 +110,7 @@ export default function LoginPage() {
             className="flex h-12 w-12 items-center justify-center rounded-2xl"
             style={{ background: "var(--accent-dim)" }}
           >
-            <Image src="/logos/logo.svg" alt="RHpro" width={26} height={26} />
+            <Image src="/logos/logo.png" alt="RHpro" width={26} height={26} />
           </div>
           <div className="text-center">
             <h1 className="text-lg font-semibold" style={{ color: "var(--text-1)" }}>
